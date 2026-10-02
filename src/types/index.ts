@@ -114,6 +114,7 @@ export interface DomesticEndUse {
 
 export interface DomesticWaterConfig {
   method: 'A' | 'B';
+  useOccupancyRates: boolean;
   perPersonRate: number; // for Method A
   perPersonSource: string;
   perPersonClassification: DesignStatus;
@@ -286,6 +287,9 @@ export interface PipeDesign {
   id: string;
   label: string;
   material: string;
+  inletHead: number; // m at upstream node
+  hazenWilliamsC: number; // project design assumption
+  maxVelocity: number; // m/s project criterion
   internalDiameter: number; // mm
   length: number; // m
   flow: number; // L/s
@@ -319,6 +323,7 @@ export interface GreywaterConfig {
   laundryFlow: number; // L/day
   otherSinkFlow: number; // L/day
   treatmentEfficiency: number; // %
+  wcFlushingDemand: number; // eligible daily demand, independently confirmed
   reuseForWCFlushing: boolean;
   reuseForIrrigation: boolean;
   reuseForCleaning: boolean;
@@ -458,6 +463,9 @@ export interface ChecklistItem {
 // ----------------------------------------------------------------
 
 export interface ProjectData {
+  demandBasis: { lossAllowancePct: number; maxDayFactor: number; source: string };
+  peakDesign: { flow: number; source: string; verified: boolean };
+
   projectInfo: ProjectInfo;
   occupancy: OccupancyGroup[];
   domesticWater: DomesticWaterConfig;

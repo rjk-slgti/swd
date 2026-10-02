@@ -16,14 +16,14 @@ import {
   Tabs,
   BarChart,
   KPICard,
-  ProgressRing,
+
 } from '@/components/ui';
 import {
   Users, Droplets, FlaskConical, Warehouse, Fuel,
   Trash2, CloudRain, Recycle, Flame, Leaf,
   Calculator, ClipboardCheck, FileText, Settings, LayoutDashboard,
 } from 'lucide-react';
-import type { OccupancyGroup, WorkshopProcess, Fixture, TankDimension, PipeDesign } from '@/types';
+import type { OccupancyGroup, WorkshopProcess, Fixture, TankDimension } from '@/types';
 
 // ============================================================
 // STEP 1 — PROJECT DETAILS
@@ -217,8 +217,10 @@ export function StepDomesticWater() {
 
         {dw.method === 'A' ? (
           <div className="space-y-4">
+            <label className="flex gap-2 text-sm"><input type="checkbox" checked={dw.useOccupancyRates} onChange={e => setProject(p => ({ ...p, domesticWater: { ...p.domesticWater, useOccupancyRates: e.target.checked } }))} />Use each occupancy group’s allowance (recommended for mixed residential/day users)</label>
+            <p className="text-sm text-slate-600">The selected domestic method is counted once. Group demand and end-use demand are alternative estimates. Special uses must be additional to these allowances.</p>
             <NumberInput
-              label="Per-person Daily Consumption"
+              label="Uniform rate (used only when group rates are off)"
               value={dw.perPersonRate}
               onChange={(v) => setProject((p) => ({ ...p, domesticWater: { ...p.domesticWater, perPersonRate: v } }))}
               unit="L/person/day"
@@ -234,7 +236,7 @@ export function StepDomesticWater() {
           <div className="space-y-3">
             {dw.endUses.map((eu) => (
               <div key={eu.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end p-3 bg-slate-50 rounded-lg">
-                <div className="md:col-span-2"><TextInput label="End Use" value={eu.name} onChange={() => {}} /></div>
+                <div className="md:col-span-2"><TextInput label="End Use" value={eu.name} onChange={v => setProject(p => ({ ...p, domesticWater: { ...p.domesticWater, endUses: p.domesticWater.endUses.map(e => e.id === eu.id ? { ...e, name: v } : e) } }))} /></div>
                 <NumberInput label="Rate" value={eu.perPersonPerDay} onChange={(v) => setProject((p) => ({ ...p, domesticWater: { ...p.domesticWater, endUses: p.domesticWater.endUses.map((e) => e.id === eu.id ? { ...e, perPersonPerDay: v } : e) } }))} unit="L/p/day" />
                 <div><StatusBadge status={eu.classification} /></div>
               </div>
@@ -243,6 +245,11 @@ export function StepDomesticWater() {
         )}
       </Card>
 
+      <Card><h3 className="font-semibold mb-4">Daily demand design basis</h3><div className="grid md:grid-cols-3 gap-4">
+        <NumberInput label="Loss allowance" unit="%" max={100} value={project.demandBasis.lossAllowancePct} onChange={v => setProject(p => ({ ...p, demandBasis: { ...p.demandBasis, lossAllowancePct: v } }))} status="Engineering Assumption" />
+        <NumberInput label="Maximum day factor" unit="× ADD" min={1} step={0.05} value={project.demandBasis.maxDayFactor} onChange={v => setProject(p => ({ ...p, demandBasis: { ...p.demandBasis, maxDayFactor: v } }))} status="Engineering Assumption" />
+        <NumberInput label="Future expansion" unit="%" value={project.futureExpansion.enabled ? project.futureExpansion.percentageGrowth : 0} onChange={v => setProject(p => ({ ...p, futureExpansion: { ...p.futureExpansion, percentageGrowth: v, enabled: v > 0 } }))} status="Engineering Assumption" />
+      </div><TextInput label="Design basis source" value={project.demandBasis.source} onChange={v => setProject(p => ({ ...p, demandBasis: { ...p.demandBasis, source: v } }))} /></Card>
       {results.domestic && (
         <>
           <CalcDisplay
@@ -455,6 +462,7 @@ export function StepPeakDemand() {
     setProject((p) => ({
       ...p,
       fixtures: p.fixtures.map((f) => (f.id === id ? { ...f, quantity: qty } : f)),
+      peakDesign: { ...p.peakDesign, verified: false },
     }));
   };
 
@@ -481,10 +489,18 @@ export function StepPeakDemand() {
       </EduCard>
 
       <EduCard title="How is this calculated?" icon="how">
-        <p><strong>Formula:</strong> Q (L/s) = 0.071 × √(Total Loading Units)</p>
-        <p className="mt-1">This is a recognized approximation of the BS EN 806-3 design flow curve. For detailed design, refer to the full standard curve. Each fixture type has a loading unit value representing its relative demand intensity.</p>
+        <p>Use a verified calculation from the selected standard, including its applicability, curve/table and revision.</p>
+        <p className="mt-1">No universal loading-unit conversion is applied. The fixture schedule is a review input. Additional design information required until a documented peak flow is entered and confirmed.</p>
       </EduCard>
 
+      <Card>
+        <div className="grid md:grid-cols-2 gap-4">
+          <NumberInput label="Externally calculated peak flow" unit="L/s" step={0.01} value={project.peakDesign.flow} onChange={v => setProject(p => ({ ...p, peakDesign: { ...p.peakDesign, flow: v, verified: false } }))} />
+          <TextInput label="Standard / table / calculation reference" value={project.peakDesign.source} onChange={v => setProject(p => ({ ...p, peakDesign: { ...p.peakDesign, source: v, verified: false } }))} />
+        </div>
+        <label className="flex gap-2 text-sm mt-4"><input type="checkbox" checked={project.peakDesign.verified} onChange={e => setProject(p => ({ ...p, peakDesign: { ...p.peakDesign, verified: e.target.checked } }))} />I have checked this flow against the selected design method and fixture schedule.</label>
+        {!results.peakFlow && <p role="status" className="mt-3 text-amber-700">Additional design information required. No probable peak flow has been confirmed.</p>}
+      </Card>
       {results.peakFlow && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <ResultCard label="Total Loading Units" value={results.peakFlow.totalFixtureUnits} unit="LU" color="slate" />
@@ -507,12 +523,12 @@ export function StepPeakDemand() {
             f.source,
           ])}
         />
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
           {project.fixtures.map((f) => (
             <div key={f.id} className="flex items-center gap-2">
               <NumberInput label={f.type} value={f.quantity} onChange={(v) => updateFixture(f.id, v)} unit="qty" />
             </div>
-          )).slice(0, 9)}
+          ))}
         </div>
         <button onClick={addFixture} className="mt-3 px-4 py-2 text-sm font-medium text-blue-600 border border-blue-300 rounded-md hover:bg-blue-50">+ Add Custom Fixture</button>
       </Card>
@@ -643,6 +659,7 @@ export function StepPumpDesign() {
         </div>
       </Card>
 
+      {!results.pump && <p role="status" className="text-amber-700">Additional design information required: provide a positive flow and pump/motor efficiencies, or confirm peak flow in Step 6.</p>}
       {results.pump && (
         <>
           <CalcDisplay
@@ -682,12 +699,12 @@ export function StepWastewater() {
 
       <EduCard title="How is this calculated?" icon="how">
         <p><strong>Formula:</strong> Wastewater = Indoor Demand × Sewer Return Factor + Process/Kitchen/Hostel/Other Wastewater</p>
-        <p className="mt-1">The sewer return factor (typically 80–90%) represents the proportion of supplied water that returns as wastewater. Irrigation losses are NOT included as wastewater.</p>
+        <p className="mt-1">Additional wastewater fields must represent sources outside the modeled domestic/canteen/workshop baseline; otherwise leave them at zero to avoid double counting. The sewer return factor represents the proportion of supplied water that returns as wastewater. Irrigation losses are NOT included as wastewater.</p>
       </EduCard>
 
       <Card>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <NumberInput label="Sewer Return Factor" value={project.wastewater.sewerReturnFactor} onChange={(v) => setProject((p) => ({ ...p, wastewater: { ...p.wastewater, sewerReturnFactor: v } }))} unit="%" source={project.wastewater.source} status={project.wastewater.classification} />
+          <NumberInput max={100} label="Sewer Return Factor" value={project.wastewater.sewerReturnFactor} onChange={(v) => setProject((p) => ({ ...p, wastewater: { ...p.wastewater, sewerReturnFactor: v } }))} unit="%" source={project.wastewater.source} status={project.wastewater.classification} />
           <NumberInput label="Process Wastewater" value={project.wastewater.processWastewater} onChange={(v) => setProject((p) => ({ ...p, wastewater: { ...p.wastewater, processWastewater: v } }))} unit="L/day" />
           <NumberInput label="Kitchen Wastewater" value={project.wastewater.kitchenWastewater} onChange={(v) => setProject((p) => ({ ...p, wastewater: { ...p.wastewater, kitchenWastewater: v } }))} unit="L/day" />
           <NumberInput label="Hostel Wastewater" value={project.wastewater.hostelWastewater} onChange={(v) => setProject((p) => ({ ...p, wastewater: { ...p.wastewater, hostelWastewater: v } }))} unit="L/day" />
@@ -827,7 +844,7 @@ export function StepGreywater() {
               <NumberInput label="Shower Flow" value={gw.showerFlow} onChange={(v) => update('showerFlow', v)} unit="L/day" />
               <NumberInput label="Laundry Flow" value={gw.laundryFlow} onChange={(v) => update('laundryFlow', v)} unit="L/day" />
               <NumberInput label="Other Sink Flow" value={gw.otherSinkFlow} onChange={(v) => update('otherSinkFlow', v)} unit="L/day" />
-              <NumberInput label="Treatment Efficiency" value={gw.treatmentEfficiency} onChange={(v) => update('treatmentEfficiency', v)} unit="%" source={gw.source} status={gw.classification} />
+              <NumberInput max={100} label="Treatment Efficiency" value={gw.treatmentEfficiency} onChange={(v) => update('treatmentEfficiency', v)} unit="%" source={gw.source} status={gw.classification} />
             </div>
             <div className="mt-4 space-y-2">
               <h4 className="text-sm font-medium text-slate-700">Reuse Options</h4>
@@ -839,6 +856,7 @@ export function StepGreywater() {
         )}
       </Card>
 
+      <Card><NumberInput label="Confirmed eligible WC flushing demand" unit="L/day" value={project.greywater.wcFlushingDemand} onChange={v => setProject(p => ({ ...p, greywater: { ...p.greywater, wcFlushingDemand: v } }))} status="User Defined" /><p className="mt-2 text-sm text-slate-600">Reuse is capped by available water and selected eligible demand. Rainwater uses the remaining demand after greywater; annual-average potential does not establish seasonal reliability.</p></Card>
       {results.greywater && (
         <>
           <CalcDisplay
@@ -930,7 +948,7 @@ export function StepFireWater() {
 // ============================================================
 
 export function StepSustainability() {
-  const { project, results } = useProject();
+  const { results } = useProject();
 
   return (
     <div className="space-y-6">
@@ -1098,21 +1116,21 @@ export function StepReport() {
               <div className="flex justify-between"><span className="text-slate-500">Project:</span><span className="font-medium text-slate-800">{project.projectInfo.projectName}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Location:</span><span className="font-medium text-slate-800">{project.projectInfo.location}, {project.projectInfo.country}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Total Population:</span><span className="font-medium text-slate-800">{results.totalPopulation} persons</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Average Daily Demand:</span><span className="font-medium text-slate-800">{results.add.finalADDm3} m³/day</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Maximum Daily Demand:</span><span className="font-medium text-slate-800">{results.mdd?.mddm3 || '—'} m³/day</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Average Daily Demand:</span><span className="font-medium text-slate-800">{results.add.finalADDm3.toFixed(2)} m³/day</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Maximum Daily Demand:</span><span className="font-medium text-slate-800">{results.mdd?.mddm3?.toFixed(2) || '—'} m³/day</span></div>
             </div>
             <div className="space-y-1">
               <div className="flex justify-between"><span className="text-slate-500">Peak Design Flow:</span><span className="font-medium text-slate-800">{results.peakFlow?.probablePeakFlow || '—'} L/s</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Domestic Storage:</span><span className="font-medium text-slate-800">{results.storage?.requiredCapacity || '—'} m³</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Wastewater:</span><span className="font-medium text-slate-800">{results.wastewater?.wastewaterM3Day || '—'} m³/day</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Rainwater Potential:</span><span className="font-medium text-slate-800">{results.rainwater?.annualHarvested || '—'} m³/year</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Pump Duty:</span><span className="font-medium text-slate-800">{results.pump?.designFlowM3h || '—'} m³/h @ {results.pump?.tdh || '—'} m</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Domestic Storage:</span><span className="font-medium text-slate-800">{results.storage?.requiredCapacity?.toFixed(2) || '—'} m³</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Wastewater:</span><span className="font-medium text-slate-800">{results.wastewater?.wastewaterM3Day?.toFixed(2) || '—'} m³/day</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Rainwater Potential:</span><span className="font-medium text-slate-800">{results.rainwater?.annualHarvested?.toFixed(2) || '—'} m³/year</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Pump Duty:</span><span className="font-medium text-slate-800">{results.pump?.designFlowM3h?.toFixed(2) || '—'} m³/h @ {results.pump?.tdh?.toFixed(2) || '—'} m</span></div>
             </div>
           </div>
         </Card>
       )}
 
-      <Card>
+      <Card className="print:hidden">
         <h3 className="text-sm font-semibold text-slate-700 mb-4">Export Options</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <button onClick={() => window.dispatchEvent(new CustomEvent('export-pdf'))} className="flex items-center gap-3 p-4 border-2 border-red-200 rounded-lg hover:bg-red-50 transition-colors text-left">
@@ -1183,7 +1201,7 @@ export function Dashboard() {
         <KPICard label="Rainwater" value={results.rainwater?.annualHarvested?.toFixed(0) || '—'} unit="m³/yr" icon={<CloudRain className="w-5 h-5" />} color="cyan" />
         <KPICard label="Potable Reduction" value={results.sustainability?.potableReductionPct || '—'} unit="%" icon={<Recycle className="w-5 h-5" />} color="green" />
         <KPICard label="Efficiency Score" value={results.sustainability?.efficiencyScore || '—'} unit="/100" icon={<Leaf className="w-5 h-5" />} color={(results.sustainability?.efficiencyScore ?? 0) >= 70 ? 'green' : 'amber'} />
-        <KPICard label="Pump TDH" value={results.pump?.tdh || '—'} unit="m" icon={<Fuel className="w-5 h-5" />} color="blue" />
+        <KPICard label="Pump TDH" value={results.pump?.tdh?.toFixed(2) || '—'} unit="m" icon={<Fuel className="w-5 h-5" />} color="blue" />
         <KPICard label="Completion" value={results.completionPct} unit="%" icon={<ClipboardCheck className="w-5 h-5" />} color={results.completionPct >= 90 ? 'green' : 'amber'} />
       </div>
 
@@ -1257,7 +1275,7 @@ export function Dashboard() {
 // ============================================================
 
 export function StepStandards() {
-  const { project, setProject } = useProject();
+  const { project } = useProject();
 
   return (
     <div className="space-y-6">

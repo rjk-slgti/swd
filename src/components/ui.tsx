@@ -1,3 +1,4 @@
+import { useProject } from '@/context/ProjectContext';
 import { useState, type ReactNode } from 'react';
 import { ChevronDown, Info, BookOpen, AlertTriangle, Lightbulb } from 'lucide-react';
 
@@ -14,6 +15,8 @@ interface EduCardProps {
 
 export function EduCard({ title, icon = 'why', children, defaultOpen = false }: EduCardProps) {
   const [open, setOpen] = useState(defaultOpen);
+  const { project } = useProject();
+  if (project.designMode === 'professional' && icon !== 'warning') return null;
 
   const icons = {
     why: <BookOpen className="w-4 h-4 text-blue-600" />,
@@ -86,16 +89,17 @@ export function NumberInput({
       </label>
       <div className="flex items-center gap-2">
         <input
+          aria-label={label}
           type="number"
-          value={value || ''}
+          value={value}
           onChange={(e) => {
             const v = parseFloat(e.target.value);
-            onChange(isNaN(v) ? 0 : v);
+            onChange(Number.isFinite(v) ? Math.max(min, Math.min(max ?? (unit === '%' ? 100 : 1e9), v)) : 0);
           }}
           min={min}
           max={max}
           step={step}
-          className="flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          className="min-w-0 w-full flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
         />
         {unit && <span className="text-xs text-slate-500 whitespace-nowrap min-w-[80px]">{unit}</span>}
       </div>

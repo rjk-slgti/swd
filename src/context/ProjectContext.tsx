@@ -4,16 +4,20 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   type ReactNode,
 } from 'react';
 import type { ProjectData, AllResults } from '@/types';
 import { createEmptyProject, createSampleProject } from '@/data/defaults';
 import { calculateAll } from '@/calculations/engine';
 
+import { parseProject } from '@/utils/projectValidation';
+
 const STORAGE_KEY = 'water-services-projects';
 const ACTIVE_KEY = 'water-services-active';
 
 interface ProjectContextValue {
+  storageError: string;
   project: ProjectData;
   results: AllResults;
   savedProjects: { name: string; data: ProjectData }[];
@@ -31,11 +35,12 @@ interface ProjectContextValue {
 const ProjectContext = createContext<ProjectContextValue | null>(null);
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
+  const [storageError, setStorageError] = useState('');
   const [project, setProjectState] = useState<ProjectData>(() => {
     try {
       const active = localStorage.getItem(ACTIVE_KEY);
       if (active) {
-        return JSON.parse(active) as ProjectData;
+        return parseProject(JSON.parse(active));
       }
     } catch {
       // ignore
@@ -50,7 +55,8 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        setSavedProjects(JSON.parse(saved));
+        const list: unknown = JSON.parse(saved);
+        if (Array.isArray(list)) setSavedProjects(list.flatMap(entry => { try { return typeof entry.name === 'string' ? [{ name: entry.name, data: parseProject(entry.data) }] : []; } catch { return []; } }));
       }
     } catch {
       // ignore
@@ -61,13 +67,14 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       localStorage.setItem(ACTIVE_KEY, JSON.stringify(project));
+      setStorageError('');
     } catch {
-      // ignore
+      setStorageError('Automatic save failed. Export a JSON backup before closing this page.');
     }
   }, [project]);
 
   // Recalculate results whenever project changes
-  const results = calculateAll(project);
+  const results = useMemo(() => calculateAll(project), [project]);
 
   const setProject = useCallback(
     (updater: ProjectData | ((prev: ProjectData) => ProjectData)) => {
@@ -79,36 +86,20 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   );
 
   const loadProject = useCallback((data: ProjectData) => {
-    setProjectState(data);
+    setProjectState(parseProject(data));
   }, []);
 
-  const saveProject = useCallback(
-    (name: string) => {
-      setSavedProjects((prev) => {
-        const filtered = prev.filter((p) => p.name !== name);
-        const updated = [...filtered, { name, data: project }];
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-        } catch {
-          // ignore
-        }
-        return updated;
-      });
-    },
-    [project]
-  );
+  const saveProject = useCallback((name: string) => {
+    const updated = [...savedProjects.filter(p => p.name !== name), { name, data: structuredClone(project) }];
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); setSavedProjects(updated); setStorageError(''); }
+    catch { setStorageError('Project could not be saved. Storage may be full; export a JSON backup.'); throw new Error('Project could not be saved.'); }
+  }, [project, savedProjects]);
 
   const deleteProject = useCallback((name: string) => {
-    setSavedProjects((prev) => {
-      const updated = prev.filter((p) => p.name !== name);
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      } catch {
-        // ignore
-      }
-      return updated;
-    });
-  }, []);
+    const updated = savedProjects.filter(p => p.name !== name);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); setSavedProjects(updated); }
+    catch { setStorageError('Saved project could not be deleted.'); }
+  }, [savedProjects]);
 
   const loadSampleProject = useCallback(() => {
     setProjectState(createSampleProject());
@@ -122,10 +113,14 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     (name: string) => {
       const found = savedProjects.find((p) => p.name === name);
       if (found) {
-        setProjectState({
-          ...found.data,
-          projectInfo: { ...found.data.projectInfo, projectName: `${found.data.projectInfo.projectName} (Copy)` },
-        });
+        let copyName = `${name} (Copy)`;
+        let suffix = 2;
+        while (savedProjects.some(p => p.name === copyName)) copyName = `${name} (Copy ${suffix++})`;
+        const data = structuredClone(found.data);
+        data.projectInfo.projectName = copyName;
+        const updated = [...savedProjects, { name: copyName, data }];
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); setSavedProjects(updated); setProjectState(data); }
+        catch { setStorageError('Project could not be duplicated. Export a JSON backup.'); }
       }
     },
     [savedProjects]
@@ -143,14 +138,16 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   }, [project]);
 
   const importJSON = useCallback(async (file: File) => {
+    if (file.size > 5_000_000) throw new Error('Project files must be under 5 MB.');
     const text = await file.text();
-    const data = JSON.parse(text) as ProjectData;
-    setProjectState(data);
+    const data = parseProject(JSON.parse(text));
+    setProjectState(parseProject(data));
   }, []);
 
   return (
     <ProjectContext.Provider
       value={{
+        storageError,
         project,
         results,
         savedProjects,

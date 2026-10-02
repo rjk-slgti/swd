@@ -287,24 +287,24 @@ export const defaultStandards: StandardReference[] = [
 
 // ============================================================
 // FIXTURE DATA — Loading units and design flows
-// Loading units based on BS EN 806-3 / BS 8558 typical values
+// Illustrative loading-unit inputs; no verified standard attribution.
 // ============================================================
 
 export const defaultFixtures: Fixture[] = [
-  { id: 'FX-01', type: 'WC cistern', quantity: 0, loadingUnit: 2, fixtureUnit: 2, designFlow: 0.1, source: 'BS EN 806-3 typical' },
-  { id: 'FX-02', type: 'WC flush valve', quantity: 0, loadingUnit: 5, fixtureUnit: 5, designFlow: 1.5, source: 'BS EN 806-3 typical' },
-  { id: 'FX-03', type: 'Urinal', quantity: 0, loadingUnit: 1, fixtureUnit: 1, designFlow: 0.15, source: 'BS EN 806-3 typical' },
-  { id: 'FX-04', type: 'Wash basin', quantity: 0, loadingUnit: 1, fixtureUnit: 1, designFlow: 0.12, source: 'BS EN 806-3 typical' },
-  { id: 'FX-05', type: 'Shower', quantity: 0, loadingUnit: 3, fixtureUnit: 3, designFlow: 0.2, source: 'BS EN 806-3 typical' },
-  { id: 'FX-06', type: 'Bath', quantity: 0, loadingUnit: 10, fixtureUnit: 10, designFlow: 0.4, source: 'BS EN 806-3 typical' },
-  { id: 'FX-07', type: 'Kitchen sink', quantity: 0, loadingUnit: 2, fixtureUnit: 2, designFlow: 0.2, source: 'BS EN 806-3 typical' },
+  { id: 'FX-01', type: 'WC cistern', quantity: 0, loadingUnit: 2, fixtureUnit: 2, designFlow: 0.1, source: 'Illustrative assumption; verify fixture data' },
+  { id: 'FX-02', type: 'WC flush valve', quantity: 0, loadingUnit: 5, fixtureUnit: 5, designFlow: 1.5, source: 'Illustrative assumption; verify fixture data' },
+  { id: 'FX-03', type: 'Urinal', quantity: 0, loadingUnit: 1, fixtureUnit: 1, designFlow: 0.15, source: 'Illustrative assumption; verify fixture data' },
+  { id: 'FX-04', type: 'Wash basin', quantity: 0, loadingUnit: 1, fixtureUnit: 1, designFlow: 0.12, source: 'Illustrative assumption; verify fixture data' },
+  { id: 'FX-05', type: 'Shower', quantity: 0, loadingUnit: 3, fixtureUnit: 3, designFlow: 0.2, source: 'Illustrative assumption; verify fixture data' },
+  { id: 'FX-06', type: 'Bath', quantity: 0, loadingUnit: 10, fixtureUnit: 10, designFlow: 0.4, source: 'Illustrative assumption; verify fixture data' },
+  { id: 'FX-07', type: 'Kitchen sink', quantity: 0, loadingUnit: 2, fixtureUnit: 2, designFlow: 0.2, source: 'Illustrative assumption; verify fixture data' },
   { id: 'FX-08', type: 'Laboratory sink', quantity: 0, loadingUnit: 3, fixtureUnit: 3, designFlow: 0.2, source: 'Engineering estimate' },
   { id: 'FX-09', type: 'Workshop sink', quantity: 0, loadingUnit: 3, fixtureUnit: 3, designFlow: 0.2, source: 'Engineering estimate' },
-  { id: 'FX-10', type: 'Drinking fountain', quantity: 0, loadingUnit: 1, fixtureUnit: 0.5, designFlow: 0.05, source: 'BS EN 806-3 typical' },
+  { id: 'FX-10', type: 'Drinking fountain', quantity: 0, loadingUnit: 1, fixtureUnit: 0.5, designFlow: 0.05, source: 'Illustrative assumption; verify fixture data' },
   { id: 'FX-11', type: 'Hose tap', quantity: 0, loadingUnit: 4, fixtureUnit: 4, designFlow: 0.3, source: 'BS 8558 typical' },
   { id: 'FX-12', type: 'Washing machine', quantity: 0, loadingUnit: 3, fixtureUnit: 3, designFlow: 0.2, source: 'Manufacturer typical' },
   { id: 'FX-13', type: 'Dishwasher', quantity: 0, loadingUnit: 2, fixtureUnit: 2, designFlow: 0.15, source: 'Manufacturer typical' },
-  { id: 'FX-14', type: 'Bidet', quantity: 0, loadingUnit: 2, fixtureUnit: 2, designFlow: 0.12, source: 'BS EN 806-3 typical' },
+  { id: 'FX-14', type: 'Bidet', quantity: 0, loadingUnit: 2, fixtureUnit: 2, designFlow: 0.12, source: 'Illustrative assumption; verify fixture data' },
   { id: 'FX-15', type: 'Cleaner sink', quantity: 0, loadingUnit: 4, fixtureUnit: 4, designFlow: 0.3, source: 'BS 8558 typical' },
 ];
 
@@ -335,6 +335,8 @@ export const kilinochchiMonthlyRainfall: number[] = [
 
 export function createSampleProject(): ProjectData {
   return {
+    demandBasis: { lossAllowancePct: 10, maxDayFactor: 1.5, source: 'Preliminary engineering allowance; verification required' },
+    peakDesign: { flow: 0, source: '', verified: false },
     projectInfo: {
       projectName: 'SLGTI Vocational Training Centre',
       client: 'Sri Lanka German Training Institute',
@@ -358,13 +360,14 @@ export function createSampleProject(): ProjectData {
       { id: 'OCC-01', name: 'Day Trainees', category: 'Day Users', count: 450, occupancyPeriod: 8, daysPerWeek: 5, consumptionFactor: 35, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
       { id: 'OCC-02', name: 'Teaching Staff', category: 'Day Users', count: 40, occupancyPeriod: 8, daysPerWeek: 5, consumptionFactor: 45, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
       { id: 'OCC-03', name: 'Administrative Staff', category: 'Day Users', count: 15, occupancyPeriod: 8, daysPerWeek: 5, consumptionFactor: 40, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
-      { id: 'OCC-04', name: 'Support Staff', category: 'Day Users', count: 20, occupancyPeriod: 8, daysPerWeek: 5, consumptionFactor: 40, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
+      { id: 'OCC-04', name: 'Support Staff', category: 'Day Users', count: 5, occupancyPeriod: 8, daysPerWeek: 5, consumptionFactor: 40, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
       { id: 'OCC-05', name: 'Hostel Students', category: 'Residential Users', count: 120, occupancyPeriod: 24, daysPerWeek: 7, consumptionFactor: 120, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
-      { id: 'OCC-06', name: 'Hostel Staff', category: 'Residential Users', count: 5, occupancyPeriod: 24, daysPerWeek: 7, consumptionFactor: 120, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
-      { id: 'OCC-07', name: 'Visitors', category: 'Other Users', count: 30, occupancyPeriod: 4, daysPerWeek: 5, consumptionFactor: 15, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
+      { id: 'OCC-06', name: 'Hostel Staff', category: 'Residential Users', count: 0, occupancyPeriod: 24, daysPerWeek: 7, consumptionFactor: 120, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
+      { id: 'OCC-07', name: 'Visitors', category: 'Other Users', count: 0, occupancyPeriod: 4, daysPerWeek: 5, consumptionFactor: 15, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
     ],
     domesticWater: {
       method: 'A',
+      useOccupancyRates: true,
       perPersonRate: 35,
       perPersonSource: 'Preliminary engineering allowance',
       perPersonClassification: 'Engineering Assumption',
@@ -395,7 +398,7 @@ export function createSampleProject(): ProjectData {
       classification: 'Engineering Assumption',
     },
     workshops: [
-      { id: 'WS-01', category: 'Construction', equipment: 'Concrete mixing', process: 'Concrete batching', waterPerEvent: 200, eventsPerDay: 5, operatingDays: 5, flowRequirement: 0.5, duration: 2, source: 'Engineering estimate', classification: 'Engineering Assumption' },
+      { id: 'WS-01', category: 'Construction', equipment: 'Concrete mixing', process: 'Concrete batching', waterPerEvent: 320, eventsPerDay: 5, operatingDays: 5, flowRequirement: 0.5, duration: 2, source: 'Engineering estimate', classification: 'Engineering Assumption' },
       { id: 'WS-02', category: 'Automotive', equipment: 'Vehicle service bay', process: 'Engine cooling water', waterPerEvent: 150, eventsPerDay: 4, operatingDays: 5, flowRequirement: 0.3, duration: 1, source: 'Engineering estimate', classification: 'Engineering Assumption' },
       { id: 'WS-03', category: 'Plumbing', equipment: 'Pipe testing', process: 'Pressure testing', waterPerEvent: 100, eventsPerDay: 3, operatingDays: 5, flowRequirement: 0.2, duration: 0.5, source: 'Engineering estimate', classification: 'Engineering Assumption' },
     ],
@@ -406,7 +409,7 @@ export function createSampleProject(): ProjectData {
       toiletFloorArea: 500,
       hostelFloorArea: 2000,
       externalPavedArea: 1000,
-      cleaningRate: 1.5,
+      cleaningRate: 0.35,
       cleaningFrequency: 5,
       source: 'Preliminary engineering allowance',
       classification: 'Engineering Assumption',
@@ -441,13 +444,13 @@ export function createSampleProject(): ProjectData {
       classification: 'Engineering Assumption',
     },
     fixtures: [
-      { id: 'FX-01', type: 'WC cistern', quantity: 30, loadingUnit: 2, fixtureUnit: 2, designFlow: 0.1, source: 'BS EN 806-3 typical' },
-      { id: 'FX-03', type: 'Urinal', quantity: 10, loadingUnit: 1, fixtureUnit: 1, designFlow: 0.15, source: 'BS EN 806-3 typical' },
-      { id: 'FX-04', type: 'Wash basin', quantity: 40, loadingUnit: 1, fixtureUnit: 1, designFlow: 0.12, source: 'BS EN 806-3 typical' },
-      { id: 'FX-05', type: 'Shower', quantity: 20, loadingUnit: 3, fixtureUnit: 3, designFlow: 0.2, source: 'BS EN 806-3 typical' },
-      { id: 'FX-07', type: 'Kitchen sink', quantity: 5, loadingUnit: 2, fixtureUnit: 2, designFlow: 0.2, source: 'BS EN 806-3 typical' },
+      { id: 'FX-01', type: 'WC cistern', quantity: 30, loadingUnit: 2, fixtureUnit: 2, designFlow: 0.1, source: 'Illustrative assumption; verify fixture data' },
+      { id: 'FX-03', type: 'Urinal', quantity: 10, loadingUnit: 1, fixtureUnit: 1, designFlow: 0.15, source: 'Illustrative assumption; verify fixture data' },
+      { id: 'FX-04', type: 'Wash basin', quantity: 40, loadingUnit: 1, fixtureUnit: 1, designFlow: 0.12, source: 'Illustrative assumption; verify fixture data' },
+      { id: 'FX-05', type: 'Shower', quantity: 20, loadingUnit: 3, fixtureUnit: 3, designFlow: 0.2, source: 'Illustrative assumption; verify fixture data' },
+      { id: 'FX-07', type: 'Kitchen sink', quantity: 5, loadingUnit: 2, fixtureUnit: 2, designFlow: 0.2, source: 'Illustrative assumption; verify fixture data' },
       { id: 'FX-09', type: 'Workshop sink', quantity: 6, loadingUnit: 3, fixtureUnit: 3, designFlow: 0.2, source: 'Engineering estimate' },
-      { id: 'FX-10', type: 'Drinking fountain', quantity: 8, loadingUnit: 1, fixtureUnit: 0.5, designFlow: 0.05, source: 'BS EN 806-3 typical' },
+      { id: 'FX-10', type: 'Drinking fountain', quantity: 8, loadingUnit: 1, fixtureUnit: 0.5, designFlow: 0.05, source: 'Illustrative assumption; verify fixture data' },
       { id: 'FX-11', type: 'Hose tap', quantity: 6, loadingUnit: 4, fixtureUnit: 4, designFlow: 0.3, source: 'BS 8558 typical' },
       { id: 'FX-15', type: 'Cleaner sink', quantity: 4, loadingUnit: 4, fixtureUnit: 4, designFlow: 0.3, source: 'BS 8558 typical' },
     ],
@@ -483,8 +486,8 @@ export function createSampleProject(): ProjectData {
       classification: 'Engineering Assumption',
     },
     pipes: [
-      { id: 'PIPE-01', label: 'Rising Main — UG Tank to Roof Tank', material: 'uPVC', internalDiameter: 65, length: 120, flow: 0, elevationDifference: 18, fittingLoss: 2, source: 'Engineering estimate' },
-      { id: 'PIPE-02', label: 'Distribution Main — Academic Block', material: 'uPVC', internalDiameter: 50, length: 80, flow: 0, elevationDifference: 0, fittingLoss: 1.5, source: 'Engineering estimate' },
+      { id: 'PIPE-01', label: 'Rising Main — UG Tank to Roof Tank', material: 'uPVC', inletHead: 30, hazenWilliamsC: 140, maxVelocity: 2, internalDiameter: 65, length: 120, flow: 0, elevationDifference: 18, fittingLoss: 2, source: 'Engineering estimate' },
+      { id: 'PIPE-02', label: 'Distribution Main — Academic Block', material: 'uPVC', inletHead: 30, hazenWilliamsC: 140, maxVelocity: 2, internalDiameter: 50, length: 80, flow: 0, elevationDifference: 0, fittingLoss: 1.5, source: 'Engineering estimate' },
     ],
     wastewater: {
       sewerReturnFactor: 85,
@@ -502,6 +505,7 @@ export function createSampleProject(): ProjectData {
       laundryFlow: 0,
       otherSinkFlow: 0,
       treatmentEfficiency: 80,
+      wcFlushingDemand: 0,
       reuseForWCFlushing: true,
       reuseForIrrigation: false,
       reuseForCleaning: false,
@@ -555,6 +559,8 @@ export function createEmptyProject(): ProjectData {
   const sample = createSampleProject();
   return {
     ...sample,
+    demandBasis: { lossAllowancePct: 10, maxDayFactor: 1.5, source: 'Preliminary engineering allowance; verification required' },
+    peakDesign: { flow: 0, source: '', verified: false },
     projectInfo: {
       ...sample.projectInfo,
       projectName: 'New Project',
@@ -584,5 +590,15 @@ export function createEmptyProject(): ProjectData {
     fixtures: defaultFixtures.map(f => ({ ...f, quantity: 0 })),
     tankDimensions: [],
     workshops: [],
+    canteen: { ...sample.canteen, enabled: false },
+    cleaning: { ...sample.cleaning, enabled: false },
+    irrigation: { ...sample.irrigation, enabled: false },
+    vehicleWashing: { ...sample.vehicleWashing, enabled: false },
+    rainwater: { ...sample.rainwater, enabled: false },
+    greywater: { ...sample.greywater, enabled: false },
+    wastewater: { ...sample.wastewater, processWastewater: 0, kitchenWastewater: 0, hostelWastewater: 0, otherWastewater: 0 },
+    futureExpansion: { ...sample.futureExpansion, enabled: false },
+    pump: { ...sample.pump, requiredFlow: 0 },
+    pipes: [],
   };
 }

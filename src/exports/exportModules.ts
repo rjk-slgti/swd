@@ -8,11 +8,15 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import {
   Document, Packer, Paragraph, HeadingLevel, Table, TableRow, TableCell,
-  TextRun, AlignmentType, WidthType, BorderStyle, PageBreak,
+  TextRun, AlignmentType, WidthType, BorderStyle, PageBreak, Header, Footer, PageNumber,
 } from 'docx';
-import { saveAs } from 'file-saver';
+import saveAs from 'file-saver';
 
 // --- Helpers ---
+function reportText(value: string | number): string {
+  return String(value).replace(/\d+\.\d{4,}/g, match => Number(match).toFixed(2)).replace(/Σ/g, 'Sum').replace(/→/g, '->');
+}
+
 
 function sanitizeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9]/g, '_');
@@ -32,7 +36,7 @@ function getFilenames(project: ProjectData) {
 // PDF EXPORT
 // ============================================================
 
-export function exportPDF(project: ProjectData, results: AllResults) {
+export function exportPDF(project: ProjectData, results: AllResults, download = true) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const pageWidth = 210;
   const pageHeight = 297;
@@ -80,7 +84,7 @@ export function exportPDF(project: ProjectData, results: AllResults) {
 
   const addParagraph = (text: string, fontSize: number = 10) => {
     doc.setFontSize(fontSize);
-    const lines = doc.splitTextToSize(text, contentWidth);
+    const lines = doc.splitTextToSize(reportText(text), contentWidth);
     lines.forEach((line: string) => {
       ensureSpace(fontSize * 0.5 + 2);
       doc.text(line, margin, y);
@@ -91,9 +95,10 @@ export function exportPDF(project: ProjectData, results: AllResults) {
   const addTable = (headers: string[], rows: (string|number)[][]) => {
     autoTable(doc, {
       head: [headers],
-      body: rows.map(r => r.map(c => String(c))),
+      body: rows.map(r => r.map(c => reportText(c))),
       startY: y,
-      margin: { left: margin, right: margin },
+      margin: { left: margin, right: margin, top: 18, bottom: 18 },
+      rowPageBreak: 'avoid',
       styles: { fontSize: 8, cellPadding: 2 },
       headStyles: { fillColor: [30, 64, 175], textColor: 255 },
       alternateRowStyles: { fillColor: [240, 245, 250] },
@@ -229,6 +234,7 @@ export function exportPDF(project: ProjectData, results: AllResults) {
 
   // --- 11. PEAK FLOW ---
   addHeading('11. Peak Fixture Demand', 1);
+  if (!results.peakFlow) addParagraph('Additional design information required: documented external peak flow and design basis. No unverified fixture conversion is applied.');
   if (results.peakFlow) {
     addParagraph(`Formula: ${results.peakFlow.formula}`);
     addParagraph(`Total Loading Units: ${results.peakFlow.totalFixtureUnits}`);
@@ -267,6 +273,9 @@ export function exportPDF(project: ProjectData, results: AllResults) {
     addParagraph(`Motor Power: ${results.pump.motorPower} kW`);
   }
 
+  addHeading('14.1 Pipework Design', 2);
+  addTable(['Reach', 'Diameter mm', 'Flow L/s', 'Velocity m/s', 'Head loss m', 'Residual m', 'Review'], results.pipes.map(p => [p.pipe.label, p.pipe.internalDiameter, p.pipe.flow, p.velocity, p.totalPressureLoss, p.residualPressure, p.warnings.join('; ') || 'Meets entered criteria']));
+  if (!results.pump) addParagraph('Pump duty requires a positive flow and valid efficiencies. Manufacturer curve verification is required.');
   // --- 15. WASTEWATER ---
   addHeading('15. Wastewater', 1);
   if (results.wastewater) {
@@ -323,6 +332,8 @@ export function exportPDF(project: ProjectData, results: AllResults) {
   });
 
   // --- 21. CONCLUSION ---
+  addHeading('Design Risks and Missing Information', 1);
+  results.warnings.forEach(w => addParagraph(`[${w.level}] ${w.section}: ${w.message}`));
   addHeading('21. Conclusion', 1);
   addParagraph(
     'This preliminary water services design provides a basis for detailed design development. ' +
@@ -349,18 +360,23 @@ export function exportPDF(project: ProjectData, results: AllResults) {
     addFooter(i);
   }
 
-  doc.save(getFilenames(project).pdf);
+  if (download) doc.save(getFilenames(project).pdf);
+  return doc;
 }
 
 // ============================================================
 // EXCEL EXPORT
 // ============================================================
 
-export function exportExcel(project: ProjectData, results: AllResults) {
+export function exportExcel(project: ProjectData, results: AllResults, download = true) {
   const wb = XLSX.utils.book_new();
 
   const makeSheet = (name: string, data: (string|number)[][]) => {
     const ws = XLSX.utils.aoa_to_sheet(data);
+    const columnCount = Math.max(...data.map(row => row.length));
+    ws['!cols'] = Array.from({ length: columnCount }, (_, index) => ({ wch: Math.min(55, Math.max(15, ...data.map(row => String(row[index] ?? '').length + 2))) }));
+    if (ws['!ref']) ws['!autofilter'] = { ref: ws['!ref'] };
+    for (const key of Object.keys(ws)) if (!key.startsWith('!') && ws[key].t === 'n') ws[key].z = '#,##0.00';
     XLSX.utils.book_append_sheet(wb, ws, name.substring(0, 31));
   };
 
@@ -383,9 +399,9 @@ export function exportExcel(project: ProjectData, results: AllResults) {
   makeSheet('Design Basis', [
     ['Parameter', 'Value', 'Unit', 'Source', 'Classification'],
     ...project.occupancy.filter(g => g.count > 0).map(g => [`${g.name} rate`, g.consumptionFactor, g.unit, g.source, g.classification]),
-    ['Loss Allowance', '10', '%', 'Engineering assumption', 'Engineering Assumption'],
-    ['Future Expansion', project.futureExpansion.percentageGrowth, '%', 'Engineering assumption', 'Engineering Assumption'],
-    ['Max Day Factor', '1.5', '—', 'Engineering assumption', 'Engineering Assumption'],
+    ['Loss Allowance', project.demandBasis.lossAllowancePct, '%', 'Engineering assumption', 'Engineering Assumption'],
+    ['Future Expansion', results.add?.futureExpansionPct ?? 0, '%', 'Engineering assumption', 'Engineering Assumption'],
+    ['Max Day Factor', project.demandBasis.maxDayFactor, '—', 'Engineering assumption', 'Engineering Assumption'],
     ['Sewer Return Factor', project.wastewater.sewerReturnFactor, '%', 'Engineering assumption', 'Engineering Assumption'],
   ]);
 
@@ -582,14 +598,23 @@ export function exportExcel(project: ProjectData, results: AllResults) {
     ...results.checklist.map(c => [c.text, c.status]),
   ]);
 
-  XLSX.writeFile(wb, getFilenames(project).xlsx);
+  if (!wb.Sheets['Pumps']) makeSheet('Pumps', [['Status', 'Required action'], ['Additional design information required', 'Provide positive flow and efficiencies; verify manufacturer curve.']]);
+  if (!wb.Sheets['Peak Flow']) makeSheet('Peak Flow', [['Status', 'Required action'], ['Additional design information required', 'Enter a documented external peak-flow calculation and confirm its design basis.']]);
+  const occupancySheet = wb.Sheets['Occupancy'];
+  results.occupancy.forEach((row, index) => {
+    const n = index + 2;
+    occupancySheet[`E${n}`] = { t: 'n', f: `C${n}*D${n}`, v: row.dailyDemand, z: '#,##0.00' };
+    occupancySheet[`F${n}`] = { t: 'n', f: `E${n}/1000`, v: row.dailyDemand / 1000, z: '#,##0.00' };
+  });
+  if (download) XLSX.writeFile(wb, getFilenames(project).xlsx);
+  return wb;
 }
 
 // ============================================================
 // WORD EXPORT
 // ============================================================
 
-export async function exportWord(project: ProjectData, results: AllResults) {
+export async function exportWord(project: ProjectData, results: AllResults, download = true) {
   const border = { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' };
   const cellBorders = { top: border, bottom: border, left: border, right: border };
 
@@ -605,7 +630,7 @@ export async function exportWord(project: ProjectData, results: AllResults) {
         }),
         ...rows.map(r => new TableRow({
           children: r.map(c => new TableCell({
-            children: [new Paragraph({ children: [new TextRun({ text: String(c), size: 18 })] })],
+            children: [new Paragraph({ children: [new TextRun({ text: reportText(c), size: 18 })] })],
             borders: cellBorders,
           })),
         })),
@@ -616,7 +641,7 @@ export async function exportWord(project: ProjectData, results: AllResults) {
   const heading = (text: string, level: (typeof HeadingLevel)[keyof typeof HeadingLevel]) =>
     new Paragraph({ text, heading: level });
 
-  const para = (text: string) => new Paragraph({ children: [new TextRun({ text, size: 20 })] });
+  const para = (text: string) => new Paragraph({ children: [new TextRun({ text: reportText(text), size: 20 })] });
 
   const sections: (Paragraph | Table)[] = [];
 
@@ -773,6 +798,11 @@ export async function exportWord(project: ProjectData, results: AllResults) {
       ]));
   }
 
+  sections.push(heading('Pipework Design', HeadingLevel.HEADING_1));
+  sections.push(makeTable(['Reach', 'Diameter mm', 'Flow L/s', 'Velocity m/s', 'Residual m'], results.pipes.map(p => [p.pipe.label, p.pipe.internalDiameter, p.pipe.flow, p.velocity, p.residualPressure])));
+  sections.push(heading('Design Risks and Missing Information', HeadingLevel.HEADING_1));
+  results.warnings.forEach(w => sections.push(para(`[${w.level}] ${w.section}: ${w.message}`)));
+  if (!results.peakFlow) sections.push(para('Additional design information required: documented external simultaneous peak flow.'));
   // Recommendations
   sections.push(heading('19. Recommendations', HeadingLevel.HEADING_1));
   results.recommendations.forEach(r => sections.push(para(`[${r.priority}] ${r.text}`)));
@@ -793,11 +823,14 @@ export async function exportWord(project: ProjectData, results: AllResults) {
 
   const doc = new Document({
     sections: [{
-      properties: {},
+      properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 1134, bottom: 1134, left: 1134, right: 1134 } } },
+      headers: { default: new Header({ children: [new Paragraph({ text: `${project.projectInfo.projectName} | Rev ${project.projectInfo.revision}`, style: 'Caption' })] }) },
+      footers: { default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun('Preliminary design — verification required | Page '), new TextRun({ children: [PageNumber.CURRENT] })] })] }) },
       children: sections,
     }],
   });
 
   const blob = await Packer.toBlob(doc);
-  saveAs(blob, getFilenames(project).docx);
+  if (download) saveAs(blob, getFilenames(project).docx);
+  return blob;
 }

@@ -12,3 +12,13 @@
     display: none !important;
   }
 }
+
+button:disabled { opacity: .45; cursor: not-allowed; }
+@media print {
+  @page { size: A4; margin: 15mm; }
+  button, input[type=file] { display: none !important; }
+  main { overflow: visible !important; }
+  table { page-break-inside: auto; }
+  tr { break-inside: avoid; }
+  h2, h3 { break-after: avoid; }
+}

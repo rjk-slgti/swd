@@ -3,11 +3,11 @@ import {
   LayoutDashboard, Settings, Users, Droplets, FlaskConical,
   Warehouse, Fuel, Trash2, CloudRain, Recycle, Flame, Leaf,
   ClipboardCheck, FileText, Calculator, BookOpen, Download,
-  Upload, Save, FolderOpen, Plus, RefreshCw, Menu, X,
+  Upload, Save, FolderOpen, RefreshCw, Menu, X,
   ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2,
 } from 'lucide-react';
 import { ProjectProvider, useProject } from '@/context/ProjectContext';
-import { exportPDF, exportExcel, exportWord } from '@/exports/exportModules';
+import { StepPipeDesign } from '@/components/PipeDesign';
 import {
   StepProjectDetails, StepOccupancy, StepDomesticWater, StepSpecialWater,
   StepWaterBalance, StepPeakDemand, StepStorage, StepPumpDesign,
@@ -35,6 +35,7 @@ const navItems: NavItem[] = [
   { id: 'step6', label: 'Peak Fixture Demand', icon: Calculator, step: 6 },
   { id: 'step7', label: 'Storage Design', icon: Warehouse, step: 7 },
   { id: 'step8', label: 'Pump Design', icon: Fuel, step: 8 },
+  { id: 'pipes', label: 'Pipework Design', icon: Calculator },
   { id: 'step9', label: 'Wastewater', icon: Trash2, step: 9 },
   { id: 'step10', label: 'Rainwater Harvesting', icon: CloudRain, step: 10 },
   { id: 'step11', label: 'Greywater Reuse', icon: Recycle, step: 11 },
@@ -46,12 +47,13 @@ const navItems: NavItem[] = [
 
 function AppContent() {
   const {
-    project, results, savedProjects,
-    setProject, saveProject, deleteProject, loadProject,
+    project, results, savedProjects, storageError,
+    saveProject, deleteProject, loadProject,
     loadSampleProject, resetProject, duplicateProject,
     exportJSON, importJSON,
   } = useProject();
 
+  const [feedback, setFeedback] = useState('');
   const [activeView, setActiveView] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -61,9 +63,17 @@ function AppContent() {
 
   // Export event listeners
   useEffect(() => {
-    const handlePDF = () => exportPDF(project, results);
-    const handleXLSX = () => exportExcel(project, results);
-    const handleDOCX = () => exportWord(project, results);
+    const runExport = async (format: 'PDF' | 'Excel' | 'Word') => {
+      setFeedback(`Preparing ${format} export…`);
+      try {
+        const exports = await import('@/exports/exportModules');
+        await exports[`export${format}`](project, results);
+        setFeedback(`${format} export generated.`);
+      } catch (error) { setFeedback(`Export failed: ${error instanceof Error ? error.message : 'Please try again.'}`); }
+    };
+    const handlePDF = () => { void runExport('PDF'); };
+    const handleXLSX = () => { void runExport('Excel'); };
+    const handleDOCX = () => { void runExport('Word'); };
     const handlePrint = () => window.print();
 
     window.addEventListener('export-pdf', handlePDF);
@@ -82,13 +92,14 @@ function AppContent() {
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      importJSON(file);
+      void importJSON(file).then(() => setFeedback('Project imported.')).catch(error => setFeedback(`Import failed: ${error.message}`));
+      e.target.value = '';
     }
   };
 
   const handleSave = () => {
     const name = saveName || project.projectInfo.projectName || 'Untitled';
-    saveProject(name);
+    try { saveProject(name); } catch { return; }
     setShowSaveDialog(false);
     setSaveName('');
   };
@@ -105,6 +116,7 @@ function AppContent() {
       case 'step6': return <StepPeakDemand />;
       case 'step7': return <StepStorage />;
       case 'step8': return <StepPumpDesign />;
+      case 'pipes': return <StepPipeDesign />;
       case 'step9': return <StepWastewater />;
       case 'step10': return <StepRainwater />;
       case 'step11': return <StepGreywater />;
@@ -117,7 +129,7 @@ function AppContent() {
   };
 
   const navigateStep = (direction: 'prev' | 'next') => {
-    const stepOrder = ['dashboard', 'standards', 'step1', 'step2', 'step3', 'step4', 'step5', 'step6', 'step7', 'step8', 'step9', 'step10', 'step11', 'step12', 'step13', 'step14', 'step15'];
+    const stepOrder = ['dashboard', 'standards', 'step1', 'step2', 'step3', 'step4', 'step5', 'step6', 'step7', 'step8', 'pipes', 'step9', 'step10', 'step11', 'step12', 'step13', 'step14', 'step15'];
     const idx = stepOrder.indexOf(activeView);
     if (direction === 'prev' && idx > 0) setActiveView(stepOrder[idx - 1]);
     if (direction === 'next' && idx < stepOrder.length - 1) setActiveView(stepOrder[idx + 1]);
@@ -129,7 +141,7 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       {/* TOP BAR */}
-      <header className="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-between sticky top-0 z-40 print:hidden">
+      <header className="bg-white border-b border-slate-200 px-4 py-2.5 flex flex-wrap gap-2 items-center justify-between sticky top-0 z-40 print:hidden">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -147,7 +159,7 @@ function AppContent() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button onClick={loadSampleProject} className="hidden md:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-300 rounded-md hover:bg-blue-50 transition-colors">
             <BookOpen className="w-3.5 h-3.5" /> Sample
           </button>
@@ -243,19 +255,23 @@ function AppContent() {
         )}
 
         {/* MAIN CONTENT */}
-        <main className="flex-1 overflow-y-auto bg-slate-50 print:bg-white">
+        <main className="flex-1 min-w-0 overflow-y-auto bg-slate-50 print:bg-white">
           <div className="max-w-6xl mx-auto p-4 md:p-6 lg:p-8 print:p-0 print:max-w-none">
+            {storageError && <div role="alert" className="mb-4 rounded bg-red-50 p-3 text-red-800">{storageError}</div>}
+            {feedback && <div role="status" className="mb-4 rounded-md bg-blue-50 border border-blue-200 p-3 text-sm print:hidden">{feedback}<button className="ml-3 underline" onClick={() => setFeedback('')}>Dismiss</button></div>}
             {renderView()}
 
             {/* Navigation buttons */}
             <div className="flex items-center justify-between mt-8 pt-4 border-t border-slate-200 print:hidden">
               <button
+                disabled={activeView === 'dashboard'}
                 onClick={() => navigateStep('prev')}
                 className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-slate-600 border border-slate-300 rounded-md hover:bg-white transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" /> Previous
               </button>
               <button
+                disabled={activeView === 'step15'}
                 onClick={() => navigateStep('next')}
                 className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
               >
