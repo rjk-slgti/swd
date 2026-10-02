@@ -1,0 +1,588 @@
+import type {
+  DesignFactor,
+  StandardReference,
+  Fixture,
+  ProjectData,
+} from '@/types';
+
+// ============================================================
+// DEFAULT DESIGN FACTORS
+// Every value carries its source and classification for traceability.
+// Values are engineering allowances unless explicitly stated as standard.
+// ============================================================
+
+export const defaultFactors: DesignFactor[] = [
+  {
+    id: 'day-student',
+    name: 'Day Student / Trainee Water Consumption',
+    value: 35,
+    unit: 'L/person/day',
+    source: 'Preliminary engineering allowance for TVET centres',
+    classification: 'Engineering Assumption',
+    editable: true,
+    remarks: 'Typical range 25–45 L/person/day for day students in tropical climates',
+  },
+  {
+    id: 'teaching-staff',
+    name: 'Teaching Staff Water Consumption',
+    value: 45,
+    unit: 'L/person/day',
+    source: 'Preliminary engineering allowance',
+    classification: 'Engineering Assumption',
+    editable: true,
+    remarks: 'Typical range 30–50 L/person/day',
+  },
+  {
+    id: 'admin-staff',
+    name: 'Administrative Staff Water Consumption',
+    value: 40,
+    unit: 'L/person/day',
+    source: 'Preliminary engineering allowance',
+    classification: 'Engineering Assumption',
+    editable: true,
+  },
+  {
+    id: 'support-staff',
+    name: 'Support Staff Water Consumption',
+    value: 40,
+    unit: 'L/person/day',
+    source: 'Preliminary engineering allowance',
+    classification: 'Engineering Assumption',
+    editable: true,
+  },
+  {
+    id: 'visitor',
+    name: 'Visitor Water Consumption',
+    value: 15,
+    unit: 'L/person/day',
+    source: 'Preliminary engineering allowance',
+    classification: 'Engineering Assumption',
+    editable: true,
+  },
+  {
+    id: 'hostel-student',
+    name: 'Hostel Student Water Consumption',
+    value: 120,
+    unit: 'L/person/day',
+    source: 'Preliminary engineering allowance for residential users',
+    classification: 'Engineering Assumption',
+    editable: true,
+    remarks: 'Typical range 90–150 L/person/day for residential students',
+  },
+  {
+    id: 'hostel-staff',
+    name: 'Hostel Staff Water Consumption',
+    value: 120,
+    unit: 'L/person/day',
+    source: 'Preliminary engineering allowance',
+    classification: 'Engineering Assumption',
+    editable: true,
+  },
+  {
+    id: 'auditorium-user',
+    name: 'Auditorium User Water Consumption',
+    value: 10,
+    unit: 'L/person/day',
+    source: 'Preliminary engineering allowance for event users',
+    classification: 'Engineering Assumption',
+    editable: true,
+  },
+  {
+    id: 'sports-user',
+    name: 'Sports Facility User Water Consumption',
+    value: 25,
+    unit: 'L/person/day',
+    source: 'Preliminary engineering allowance',
+    classification: 'Engineering Assumption',
+    editable: true,
+    remarks: 'Includes showering — typical range 20–40 L/person/day',
+  },
+  {
+    id: 'canteen-meal',
+    name: 'Canteen Water per Meal',
+    value: 10,
+    unit: 'L/meal',
+    source: 'Preliminary engineering allowance for institutional kitchens',
+    classification: 'Engineering Assumption',
+    editable: true,
+    remarks: 'Typical range 7–15 L/meal depending on dishwashing method',
+  },
+  {
+    id: 'loss-allowance',
+    name: 'Loss / Wastage Allowance',
+    value: 10,
+    unit: '%',
+    source: 'Engineering assumption — covers leaks and distribution losses',
+    classification: 'Engineering Assumption',
+    editable: true,
+    remarks: 'Typical range 5–15%',
+  },
+  {
+    id: 'future-expansion',
+    name: 'Future Expansion Allowance',
+    value: 20,
+    unit: '%',
+    source: 'Engineering assumption — reserves capacity for growth',
+    classification: 'Engineering Assumption',
+    editable: true,
+    remarks: 'Typical range 10–30%',
+  },
+  {
+    id: 'max-day-factor',
+    name: 'Maximum Day Factor',
+    value: 1.5,
+    unit: '—',
+    source: 'Engineering assumption — ratio of max day to average day',
+    classification: 'Engineering Assumption',
+    editable: true,
+    remarks: 'Typical range 1.2–2.0',
+  },
+  {
+    id: 'sewer-return',
+    name: 'Sewer Return Factor',
+    value: 85,
+    unit: '%',
+    source: 'Engineering assumption — percentage of water returned as wastewater',
+    classification: 'Engineering Assumption',
+    editable: true,
+    remarks: 'Typical range 80–90% for institutional buildings',
+  },
+  {
+    id: 'cleaning-rate',
+    name: 'Cleaning Water Rate',
+    value: 1.5,
+    unit: 'L/m²',
+    source: 'Preliminary engineering allowance',
+    classification: 'Engineering Assumption',
+    editable: true,
+    remarks: 'Typical range 1–2 L/m² per wash',
+  },
+  {
+    id: 'irrigation-rate',
+    name: 'Landscape Irrigation Rate',
+    value: 5,
+    unit: 'L/m²/day',
+    source: 'Preliminary engineering allowance for tropical landscapes',
+    classification: 'Engineering Assumption',
+    editable: true,
+    remarks: 'Varies by plant type and season — typical range 3–8 L/m²/day',
+  },
+  {
+    id: 'rw-coefficient',
+    name: 'Roof Runoff Coefficient',
+    value: 0.8,
+    unit: '—',
+    source: 'Engineering assumption for pitched metal/concrete roofs',
+    classification: 'Engineering Assumption',
+    editable: true,
+    remarks: 'Typical range 0.7–0.9 for smooth roof surfaces',
+  },
+  {
+    id: 'rw-filter-eff',
+    name: 'Rainwater Filter Efficiency',
+    value: 90,
+    unit: '%',
+    source: 'Manufacturer typical — depends on filter type',
+    classification: 'Manufacturer Requirement',
+    editable: true,
+  },
+  {
+    id: 'rw-collection-eff',
+    name: 'Rainwater Collection Efficiency',
+    value: 90,
+    unit: '%',
+    source: 'Engineering assumption — accounts for plumbing losses',
+    classification: 'Engineering Assumption',
+    editable: true,
+  },
+  {
+    id: 'rw-first-flush',
+    name: 'Rainwater First-Flush Loss',
+    value: 0.5,
+    unit: 'mm',
+    source: 'Engineering assumption — initial runoff diverted',
+    classification: 'Engineering Assumption',
+    editable: true,
+  },
+];
+
+// ============================================================
+// STANDARDS & REFERENCES REGISTER
+// ============================================================
+
+export const defaultStandards: StandardReference[] = [
+  {
+    id: 'STD-01',
+    reference: 'BS EN 806-2',
+    title: 'Specifications for installations inside buildings conveying water for human consumption — Part 2: Design',
+    application: 'Pipe sizing and installation of water supply systems inside buildings',
+    sectionUsed: 'Design flow rates, pipe sizing methodology',
+    notes: 'Clause verification required',
+  },
+  {
+    id: 'STD-02',
+    reference: 'BS 8558',
+    title: 'Guide to the design, installation, testing and maintenance of services supplying water for domestic use within buildings',
+    application: 'General water service design guidance',
+    sectionUsed: 'Storage, distribution, pump design',
+    notes: 'Clause verification required',
+  },
+  {
+    id: 'STD-03',
+    reference: 'BS EN 12056-2',
+    title: 'Gravity drainage systems inside buildings — Part 2: Sanitary pipework, layout and calculation',
+    application: 'Wastewater and drainage design',
+    sectionUsed: 'Wastewater flow rates, pipe sizing',
+    notes: 'Clause verification required',
+  },
+  {
+    id: 'STD-04',
+    reference: 'BS 8515',
+    title: 'Rainwater harvesting systems — Code of practice',
+    application: 'Rainwater harvesting system design',
+    sectionUsed: 'Catchment, storage, filtration',
+    notes: 'Clause verification required',
+  },
+  {
+    id: 'STD-05',
+    reference: 'BS EN 806-3',
+    title: 'Specifications for installations inside buildings conveying water for human consumption — Part 3: Pipe sizing',
+    application: 'Pipe sizing for domestic water systems',
+    sectionUsed: 'Sizing method, loading units',
+    notes: 'Clause verification required',
+  },
+  {
+    id: 'STD-06',
+    reference: 'CIBSE Guide G',
+    title: 'Public Health Engineering',
+    application: 'General public health engineering design',
+    sectionUsed: 'Water demand, storage, wastewater',
+    notes: 'Clause verification required',
+  },
+  {
+    id: 'STD-07',
+    reference: 'BS EN 12831',
+    title: 'Energy performance of buildings — Method for calculation of the design heat load',
+    application: 'Reference for building characteristics',
+    sectionUsed: 'Building area, height data',
+    notes: 'Not directly used for water — contextual only',
+  },
+  {
+    id: 'STD-08',
+    reference: 'NWSDB Guidelines',
+    title: 'National Water Supply and Drainage Board — Sri Lanka',
+    application: 'Water supply connection and standards for Sri Lanka',
+    sectionUsed: 'Water demand, connection requirements',
+    notes: 'Verify current local requirements',
+  },
+  {
+    id: 'STD-09',
+    reference: 'Local Fire Authority Requirements',
+    title: 'Applicable fire authority — fire water requirements',
+    application: 'Fire water storage and pump sizing',
+    sectionUsed: 'Fire flow, duration, hydrant requirements',
+    notes: 'Must be verified with local fire authority',
+  },
+];
+
+// ============================================================
+// FIXTURE DATA — Loading units and design flows
+// Loading units based on BS EN 806-3 / BS 8558 typical values
+// ============================================================
+
+export const defaultFixtures: Fixture[] = [
+  { id: 'FX-01', type: 'WC cistern', quantity: 0, loadingUnit: 2, fixtureUnit: 2, designFlow: 0.1, source: 'BS EN 806-3 typical' },
+  { id: 'FX-02', type: 'WC flush valve', quantity: 0, loadingUnit: 5, fixtureUnit: 5, designFlow: 1.5, source: 'BS EN 806-3 typical' },
+  { id: 'FX-03', type: 'Urinal', quantity: 0, loadingUnit: 1, fixtureUnit: 1, designFlow: 0.15, source: 'BS EN 806-3 typical' },
+  { id: 'FX-04', type: 'Wash basin', quantity: 0, loadingUnit: 1, fixtureUnit: 1, designFlow: 0.12, source: 'BS EN 806-3 typical' },
+  { id: 'FX-05', type: 'Shower', quantity: 0, loadingUnit: 3, fixtureUnit: 3, designFlow: 0.2, source: 'BS EN 806-3 typical' },
+  { id: 'FX-06', type: 'Bath', quantity: 0, loadingUnit: 10, fixtureUnit: 10, designFlow: 0.4, source: 'BS EN 806-3 typical' },
+  { id: 'FX-07', type: 'Kitchen sink', quantity: 0, loadingUnit: 2, fixtureUnit: 2, designFlow: 0.2, source: 'BS EN 806-3 typical' },
+  { id: 'FX-08', type: 'Laboratory sink', quantity: 0, loadingUnit: 3, fixtureUnit: 3, designFlow: 0.2, source: 'Engineering estimate' },
+  { id: 'FX-09', type: 'Workshop sink', quantity: 0, loadingUnit: 3, fixtureUnit: 3, designFlow: 0.2, source: 'Engineering estimate' },
+  { id: 'FX-10', type: 'Drinking fountain', quantity: 0, loadingUnit: 1, fixtureUnit: 0.5, designFlow: 0.05, source: 'BS EN 806-3 typical' },
+  { id: 'FX-11', type: 'Hose tap', quantity: 0, loadingUnit: 4, fixtureUnit: 4, designFlow: 0.3, source: 'BS 8558 typical' },
+  { id: 'FX-12', type: 'Washing machine', quantity: 0, loadingUnit: 3, fixtureUnit: 3, designFlow: 0.2, source: 'Manufacturer typical' },
+  { id: 'FX-13', type: 'Dishwasher', quantity: 0, loadingUnit: 2, fixtureUnit: 2, designFlow: 0.15, source: 'Manufacturer typical' },
+  { id: 'FX-14', type: 'Bidet', quantity: 0, loadingUnit: 2, fixtureUnit: 2, designFlow: 0.12, source: 'BS EN 806-3 typical' },
+  { id: 'FX-15', type: 'Cleaner sink', quantity: 0, loadingUnit: 4, fixtureUnit: 4, designFlow: 0.3, source: 'BS 8558 typical' },
+];
+
+// ============================================================
+// KILINOCHCHI MONTHLY RAINFALL (mm) — approximate
+// Source: Sri Lanka Department of Meteorology historical averages
+// Values are approximate — verify with current local data
+// ============================================================
+
+export const kilinochchiMonthlyRainfall: number[] = [
+  70,  // Jan
+  55,  // Feb
+  45,  // Mar
+  70,  // Apr
+  90,  // May
+  50,  // Jun
+  40,  // Jul
+  50,  // Aug
+  90,  // Sep
+  220, // Oct
+  350, // Nov
+  180, // Dec
+];
+
+// ============================================================
+// SAMPLE PROJECT — Kilinochchi Training Centre Example
+// ============================================================
+
+export function createSampleProject(): ProjectData {
+  return {
+    projectInfo: {
+      projectName: 'SLGTI Vocational Training Centre',
+      client: 'Sri Lanka German Training Institute',
+      consultant: 'Building Services Engineering Consultant',
+      designer: 'Water Services Design Engineer',
+      checkedBy: 'Senior Public Health Engineer',
+      approvedBy: 'Project Manager',
+      location: 'Kilinochchi',
+      district: 'Kilinochchi',
+      province: 'Northern Province',
+      country: 'Sri Lanka',
+      projectType: 'Vocational Training Centre',
+      buildingType: 'Educational / Training',
+      designStage: 'Preliminary Design',
+      reportNumber: 'WS-RPT-001',
+      revision: 'P01',
+      date: new Date().toISOString().split('T')[0],
+      preparedBy: 'Design Engineer',
+    },
+    occupancy: [
+      { id: 'OCC-01', name: 'Day Trainees', category: 'Day Users', count: 450, occupancyPeriod: 8, daysPerWeek: 5, consumptionFactor: 35, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
+      { id: 'OCC-02', name: 'Teaching Staff', category: 'Day Users', count: 40, occupancyPeriod: 8, daysPerWeek: 5, consumptionFactor: 45, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
+      { id: 'OCC-03', name: 'Administrative Staff', category: 'Day Users', count: 15, occupancyPeriod: 8, daysPerWeek: 5, consumptionFactor: 40, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
+      { id: 'OCC-04', name: 'Support Staff', category: 'Day Users', count: 20, occupancyPeriod: 8, daysPerWeek: 5, consumptionFactor: 40, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
+      { id: 'OCC-05', name: 'Hostel Students', category: 'Residential Users', count: 120, occupancyPeriod: 24, daysPerWeek: 7, consumptionFactor: 120, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
+      { id: 'OCC-06', name: 'Hostel Staff', category: 'Residential Users', count: 5, occupancyPeriod: 24, daysPerWeek: 7, consumptionFactor: 120, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
+      { id: 'OCC-07', name: 'Visitors', category: 'Other Users', count: 30, occupancyPeriod: 4, daysPerWeek: 5, consumptionFactor: 15, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
+    ],
+    domesticWater: {
+      method: 'A',
+      perPersonRate: 35,
+      perPersonSource: 'Preliminary engineering allowance',
+      perPersonClassification: 'Engineering Assumption',
+      endUses: [
+        { id: 'EU-01', name: 'Drinking', perPersonPerDay: 3, unit: 'L/person/day', source: 'Engineering assumption', classification: 'Engineering Assumption' },
+        { id: 'EU-02', name: 'Handwashing', perPersonPerDay: 5, unit: 'L/person/day', source: 'Engineering assumption', classification: 'Engineering Assumption' },
+        { id: 'EU-03', name: 'WC Flushing', perPersonPerDay: 15, unit: 'L/person/day', source: 'Engineering assumption', classification: 'Engineering Assumption' },
+        { id: 'EU-04', name: 'Urinals', perPersonPerDay: 3, unit: 'L/person/day', source: 'Engineering assumption', classification: 'Engineering Assumption' },
+        { id: 'EU-05', name: 'Showers', perPersonPerDay: 5, unit: 'L/person/day', source: 'Engineering assumption', classification: 'Engineering Assumption' },
+        { id: 'EU-06', name: 'Kitchen use', perPersonPerDay: 2, unit: 'L/person/day', source: 'Engineering assumption', classification: 'Engineering Assumption' },
+        { id: 'EU-07', name: 'Cleaning', perPersonPerDay: 2, unit: 'L/person/day', source: 'Engineering assumption', classification: 'Engineering Assumption' },
+      ],
+    },
+    canteen: {
+      enabled: true,
+      mealsPerDay: 550,
+      breakfast: 120,
+      lunch: 450,
+      dinner: 120,
+      teaSnacks: 550,
+      kitchenStaff: 10,
+      waterPerMeal: 10,
+      dishwashingMethod: 'Manual',
+      drinkingWaterL: 200,
+      foodPrepL: 500,
+      cleaningL: 300,
+      source: 'Preliminary engineering allowance',
+      classification: 'Engineering Assumption',
+    },
+    workshops: [
+      { id: 'WS-01', category: 'Construction', equipment: 'Concrete mixing', process: 'Concrete batching', waterPerEvent: 200, eventsPerDay: 5, operatingDays: 5, flowRequirement: 0.5, duration: 2, source: 'Engineering estimate', classification: 'Engineering Assumption' },
+      { id: 'WS-02', category: 'Automotive', equipment: 'Vehicle service bay', process: 'Engine cooling water', waterPerEvent: 150, eventsPerDay: 4, operatingDays: 5, flowRequirement: 0.3, duration: 1, source: 'Engineering estimate', classification: 'Engineering Assumption' },
+      { id: 'WS-03', category: 'Plumbing', equipment: 'Pipe testing', process: 'Pressure testing', waterPerEvent: 100, eventsPerDay: 3, operatingDays: 5, flowRequirement: 0.2, duration: 0.5, source: 'Engineering estimate', classification: 'Engineering Assumption' },
+    ],
+    cleaning: {
+      enabled: true,
+      academicFloorArea: 3000,
+      workshopFloorArea: 1500,
+      toiletFloorArea: 500,
+      hostelFloorArea: 2000,
+      externalPavedArea: 1000,
+      cleaningRate: 1.5,
+      cleaningFrequency: 5,
+      source: 'Preliminary engineering allowance',
+      classification: 'Engineering Assumption',
+    },
+    irrigation: {
+      enabled: true,
+      landscapeArea: 2000,
+      plantCategory: 'Tropical ornamental + lawn',
+      irrigationSystem: 'Drip irrigation',
+      irrigationRate: 5,
+      irrigationDays: 4,
+      seasonalAdjustment: 10,
+      rainfallContribution: 0,
+      recycledWaterContribution: 0,
+      source: 'Preliminary engineering allowance',
+      classification: 'Engineering Assumption',
+    },
+    vehicleWashing: {
+      enabled: true,
+      motorcycles: 5,
+      cars: 3,
+      vans: 2,
+      buses: 1,
+      heavyVehicles: 1,
+      waterPerMotorcycle: 50,
+      waterPerCar: 100,
+      waterPerVan: 150,
+      waterPerBus: 300,
+      waterPerHeavy: 400,
+      recyclingPct: 0,
+      source: 'Preliminary engineering allowance',
+      classification: 'Engineering Assumption',
+    },
+    fixtures: [
+      { id: 'FX-01', type: 'WC cistern', quantity: 30, loadingUnit: 2, fixtureUnit: 2, designFlow: 0.1, source: 'BS EN 806-3 typical' },
+      { id: 'FX-03', type: 'Urinal', quantity: 10, loadingUnit: 1, fixtureUnit: 1, designFlow: 0.15, source: 'BS EN 806-3 typical' },
+      { id: 'FX-04', type: 'Wash basin', quantity: 40, loadingUnit: 1, fixtureUnit: 1, designFlow: 0.12, source: 'BS EN 806-3 typical' },
+      { id: 'FX-05', type: 'Shower', quantity: 20, loadingUnit: 3, fixtureUnit: 3, designFlow: 0.2, source: 'BS EN 806-3 typical' },
+      { id: 'FX-07', type: 'Kitchen sink', quantity: 5, loadingUnit: 2, fixtureUnit: 2, designFlow: 0.2, source: 'BS EN 806-3 typical' },
+      { id: 'FX-09', type: 'Workshop sink', quantity: 6, loadingUnit: 3, fixtureUnit: 3, designFlow: 0.2, source: 'Engineering estimate' },
+      { id: 'FX-10', type: 'Drinking fountain', quantity: 8, loadingUnit: 1, fixtureUnit: 0.5, designFlow: 0.05, source: 'BS EN 806-3 typical' },
+      { id: 'FX-11', type: 'Hose tap', quantity: 6, loadingUnit: 4, fixtureUnit: 4, designFlow: 0.3, source: 'BS 8558 typical' },
+      { id: 'FX-15', type: 'Cleaner sink', quantity: 4, loadingUnit: 4, fixtureUnit: 4, designFlow: 0.3, source: 'BS 8558 typical' },
+    ],
+    storage: {
+      storageDuration: 1,
+      reserveAllowance: 10,
+      operationalReserve: 10,
+      undergroundTankPct: 70,
+      roofTankPct: 30,
+      groundTankPct: 0,
+      elevatedTankPct: 0,
+      source: 'Engineering assumption — 1 day storage with reserves',
+      classification: 'Engineering Assumption',
+    },
+    tankDimensions: [
+      { id: 'TD-01', label: 'Underground Tank', tankType: 'Underground', shape: 'Rectangular', length: 8, width: 5, effectiveDepth: 2.5, freeboard: 0.3, requiredCapacity: 0 },
+      { id: 'TD-02', label: 'Roof Tank', tankType: 'Roof', shape: 'Rectangular', length: 4, width: 3, effectiveDepth: 1.5, freeboard: 0.2, requiredCapacity: 0 },
+    ],
+    pump: {
+      requiredFlow: 0,
+      staticHead: 15,
+      suctionHead: 2,
+      deliveryHead: 18,
+      pipeFriction: 3,
+      fittingLosses: 2,
+      equipmentLosses: 1,
+      requiredResidualPressure: 10,
+      safetyMargin: 10,
+      arrangement: 'Duty/Standby',
+      pumpEfficiency: 70,
+      motorEfficiency: 90,
+      source: 'Engineering assumption',
+      classification: 'Engineering Assumption',
+    },
+    pipes: [
+      { id: 'PIPE-01', label: 'Rising Main — UG Tank to Roof Tank', material: 'uPVC', internalDiameter: 65, length: 120, flow: 0, elevationDifference: 18, fittingLoss: 2, source: 'Engineering estimate' },
+      { id: 'PIPE-02', label: 'Distribution Main — Academic Block', material: 'uPVC', internalDiameter: 50, length: 80, flow: 0, elevationDifference: 0, fittingLoss: 1.5, source: 'Engineering estimate' },
+    ],
+    wastewater: {
+      sewerReturnFactor: 85,
+      processWastewater: 0,
+      kitchenWastewater: 0,
+      hostelWastewater: 0,
+      otherWastewater: 0,
+      source: 'Engineering assumption — typical institutional return factor',
+      classification: 'Engineering Assumption',
+    },
+    greywater: {
+      enabled: true,
+      washBasinFlow: 0,
+      showerFlow: 0,
+      laundryFlow: 0,
+      otherSinkFlow: 0,
+      treatmentEfficiency: 80,
+      reuseForWCFlushing: true,
+      reuseForIrrigation: false,
+      reuseForCleaning: false,
+      source: 'Engineering assumption',
+      classification: 'Engineering Assumption',
+    },
+    rainwater: {
+      enabled: true,
+      roofArea: 2500,
+      annualRainfall: 1310,
+      runoffCoefficient: 0.8,
+      firstFlushLoss: 0.5,
+      filterEfficiency: 90,
+      collectionEfficiency: 90,
+      monthlyRainfall: [...kilinochchiMonthlyRainfall],
+      source: 'Engineering assumption — Kilinochchi approximate rainfall',
+      classification: 'Engineering Assumption',
+    },
+    fireWater: {
+      enabled: false,
+      hazardClassification: 'Low hazard — educational',
+      buildingArea: 8000,
+      buildingHeight: 12,
+      hydrantRequired: false,
+      hoseReelRequired: true,
+      sprinklerRequired: false,
+      fireFlow: 0,
+      fireDuration: 2,
+      source: 'Must be verified with local fire authority',
+      classification: 'Verification Required',
+    },
+    futureExpansion: {
+      enabled: true,
+      additionalStudents: 100,
+      additionalStaff: 10,
+      additionalHostelResidents: 40,
+      additionalBuildings: 1,
+      percentageGrowth: 20,
+      futureYear: 10,
+    },
+    standards: [...defaultStandards],
+    designMode: 'learning',
+  };
+}
+
+// ============================================================
+// EMPTY PROJECT — for new projects
+// ============================================================
+
+export function createEmptyProject(): ProjectData {
+  const sample = createSampleProject();
+  return {
+    ...sample,
+    projectInfo: {
+      ...sample.projectInfo,
+      projectName: 'New Project',
+      client: '',
+      consultant: '',
+      designer: '',
+      checkedBy: '',
+      approvedBy: '',
+      location: 'Kilinochchi',
+      district: 'Kilinochchi',
+      province: 'Northern Province',
+      country: 'Sri Lanka',
+      reportNumber: '',
+      revision: 'P01',
+      date: new Date().toISOString().split('T')[0],
+      preparedBy: '',
+    },
+    occupancy: [
+      { id: 'OCC-01', name: 'Day Trainees', category: 'Day Users', count: 0, occupancyPeriod: 8, daysPerWeek: 5, consumptionFactor: 35, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
+      { id: 'OCC-02', name: 'Teaching Staff', category: 'Day Users', count: 0, occupancyPeriod: 8, daysPerWeek: 5, consumptionFactor: 45, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
+      { id: 'OCC-03', name: 'Administrative Staff', category: 'Day Users', count: 0, occupancyPeriod: 8, daysPerWeek: 5, consumptionFactor: 40, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
+      { id: 'OCC-04', name: 'Support Staff', category: 'Day Users', count: 0, occupancyPeriod: 8, daysPerWeek: 5, consumptionFactor: 40, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
+      { id: 'OCC-05', name: 'Hostel Students', category: 'Residential Users', count: 0, occupancyPeriod: 24, daysPerWeek: 7, consumptionFactor: 120, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
+      { id: 'OCC-06', name: 'Hostel Staff', category: 'Residential Users', count: 0, occupancyPeriod: 24, daysPerWeek: 7, consumptionFactor: 120, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
+      { id: 'OCC-07', name: 'Visitors', category: 'Other Users', count: 0, occupancyPeriod: 4, daysPerWeek: 5, consumptionFactor: 15, unit: 'L/person/day', source: 'Preliminary engineering allowance', classification: 'Engineering Assumption' },
+    ],
+    fixtures: defaultFixtures.map(f => ({ ...f, quantity: 0 })),
+    tankDimensions: [],
+    workshops: [],
+  };
+}
