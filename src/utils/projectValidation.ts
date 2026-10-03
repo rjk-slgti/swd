@@ -5,7 +5,11 @@ import type { ProjectData } from '@/types';
 export function parseProject(value: unknown): ProjectData {
   if (!value || typeof value !== 'object' || !('projectInfo' in value) || !('occupancy' in value)) throw new Error('This is not a water services project file.');
   const defaults = createSampleProject();
-  const optional = new Set(['demandBasis', 'peakDesign', 'useOccupancyRates', 'wcFlushingDemand', 'inletHead', 'hazenWilliamsC', 'maxVelocity']);
+  const optional = new Set([
+    'demandBasis', 'peakDesign', 'useOccupancyRates', 'wcFlushingDemand',
+    'inletHead', 'hazenWilliamsC', 'maxVelocity', 'projectNumber',
+    'hotWater', 'subMetering', 'wpsfFactors', 'factorOverrides', 'wpsfVersion',
+  ]);
   function walk(input: unknown, template: unknown, path: string): unknown {
     const key = path.split('.').pop() ?? '';
     if (input === undefined && optional.has(key)) return structuredClone(template);
@@ -23,6 +27,7 @@ export function parseProject(value: unknown): ProjectData {
     if (Array.isArray(template)) {
       if (!Array.isArray(input) || input.length > 10000) throw new Error(`${path}: invalid list.`);
       if (key === 'monthlyRainfall' && input.length !== 12) throw new Error('Rainfall must contain 12 months.');
+      if (template.length === 0) return input;
       return input.map((item, index) => walk(item, template[0], `${path}.${index}`));
     }
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error(`${path}: missing project section.`);

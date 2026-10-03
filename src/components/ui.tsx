@@ -1,9 +1,99 @@
 import { useProject } from '@/context/ProjectContext';
 import { useState, type ReactNode } from 'react';
-import { ChevronDown, Info, BookOpen, AlertTriangle, Lightbulb } from 'lucide-react';
+import {
+  ChevronDown,
+  Info,
+  BookOpen,
+  AlertTriangle,
+  Lightbulb,
+  ShieldAlert,
+  Flame,
+  CheckCircle2,
+  HelpCircle,
+  Activity,
+  Droplets,
+} from 'lucide-react';
+import type { EngineeringWarning, FactorClassification } from '@/types';
 
 // ============================================================
-// EDUCATIONAL EXPANDABLE CARD
+// ENGINEERING NOTICE BANNER (Section 87)
+// ============================================================
+
+export function EngineeringNoticeBanner() {
+  return (
+    <div className="bg-amber-50/80 border-l-4 border-amber-500 p-3.5 rounded-r-md text-xs text-amber-900 shadow-xs mb-4">
+      <div className="flex items-start gap-2.5">
+        <ShieldAlert className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+        <div className="space-y-1">
+          <p className="font-bold uppercase tracking-wider text-[11px] text-amber-800">
+            Prototype Engineering Notice (WPSF v1.0)
+          </p>
+          <p className="leading-relaxed text-slate-700">
+            This application uses <strong>Water Services Prototype Standard Factors (WPSF)</strong> to support preliminary water-services design, engineering education, feasibility studies, and prototype calculations. WPSF values are controlled internal design defaults and shall not be interpreted as statutory requirements, British Standards, Sri Lankan regulations, or manufacturer-certified requirements unless specifically referenced and verified. Final project design shall be checked against current applicable standards, authority requirements, project specifications, manufacturer data, and actual site conditions by suitably qualified professionals.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// PRIMARY ENGINEERING PRINCIPLE BANNER (Section 4)
+// ============================================================
+
+export function PrinciplesBanner() {
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900 mb-4 flex items-start gap-3">
+      <Droplets className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+      <div>
+        <p className="font-bold text-blue-800 mb-0.5">
+          PRIMARY ENGINEERING PRINCIPLE: DAILY CONSUMPTION vs PEAK DESIGN FLOW
+        </p>
+        <p className="text-slate-600 leading-normal">
+          <strong>Daily consumption (L/day, m³/day)</strong> governs storage volumes, source intake sizing, utility water balance, and wastewater generation.
+          <strong> Peak simultaneous demand (L/s, m³/h)</strong> governs pipe sizing, booster pump delivery flow, and residual pressure adequacy.
+          <em> Never use average daily consumption directly as the pipe design flow!</em>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// PROTOTYPE DEFAULT APPLIED BADGE (Section 11)
+// ============================================================
+
+export function PrototypeDefaultBadge({
+  classification = 'PROTOTYPE STANDARD FACTOR',
+  verificationText = 'Confirm against applicable project criteria and authority requirements.',
+}: {
+  classification?: string;
+  verificationText?: string;
+}) {
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  return (
+    <div className="relative inline-flex items-center">
+      <span
+        onMouseEnter={() => setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300 cursor-help"
+      >
+        <AlertTriangle className="w-3 h-3 text-amber-600" />
+        PROTOTYPE DEFAULT APPLIED
+      </span>
+      {showTooltip && (
+        <div className="absolute z-50 bottom-full left-0 mb-1 w-64 p-2 bg-slate-900 text-white text-[11px] rounded shadow-lg pointer-events-none">
+          <p className="font-bold text-amber-300 mb-0.5">Classification: {classification}</p>
+          <p className="text-slate-300">{verificationText}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// EDUCATIONAL EXPANDABLE CARD (Section 66)
 // ============================================================
 
 interface EduCardProps {
@@ -21,13 +111,13 @@ export function EduCard({ title, icon = 'why', children, defaultOpen = false }: 
   const icons = {
     why: <BookOpen className="w-4 h-4 text-blue-600" />,
     how: <Info className="w-4 h-4 text-cyan-600" />,
-    what: <Info className="w-4 h-4 text-blue-600" />,
+    what: <HelpCircle className="w-4 h-4 text-blue-600" />,
     tip: <Lightbulb className="w-4 h-4 text-amber-600" />,
     warning: <AlertTriangle className="w-4 h-4 text-red-600" />,
   };
 
   return (
-    <div className="border border-slate-200 rounded-lg bg-slate-50 overflow-hidden">
+    <div className="border border-slate-200 rounded-lg bg-slate-50 overflow-hidden my-2">
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"
@@ -40,7 +130,7 @@ export function EduCard({ title, icon = 'why', children, defaultOpen = false }: 
         <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="px-4 py-3 text-sm text-slate-600 leading-relaxed border-t border-slate-200">
+        <div className="px-4 py-3 text-sm text-slate-600 leading-relaxed border-t border-slate-200 bg-white">
           {children}
         </div>
       )}
@@ -63,6 +153,7 @@ interface NumberInputProps {
   tooltip?: string;
   source?: string;
   status?: string;
+  isPrototypeDefault?: boolean;
 }
 
 export function NumberInput({
@@ -76,17 +167,16 @@ export function NumberInput({
   tooltip,
   source,
   status,
+  isPrototypeDefault,
 }: NumberInputProps) {
   return (
     <div className="space-y-1">
-      <label className="block text-sm font-medium text-slate-700" title={tooltip}>
-        {label}
-        {tooltip && (
-          <span className="ml-1 text-xs text-slate-400 cursor-help" title={tooltip}>
-            ( ? )
-          </span>
-        )}
-      </label>
+      <div className="flex items-center justify-between">
+        <label className="block text-sm font-medium text-slate-700 truncate" title={tooltip}>
+          {label}
+        </label>
+        {isPrototypeDefault && <PrototypeDefaultBadge />}
+      </div>
       <div className="flex items-center gap-2">
         <input
           aria-label={label}
@@ -101,11 +191,11 @@ export function NumberInput({
           step={step}
           className="min-w-0 w-full flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
         />
-        {unit && <span className="text-xs text-slate-500 whitespace-nowrap min-w-[80px]">{unit}</span>}
+        {unit && <span className="text-xs text-slate-500 whitespace-nowrap min-w-[70px]">{unit}</span>}
       </div>
       {(source || status) && (
-        <div className="flex items-center gap-2 text-xs">
-          {source && <span className="text-slate-400">Source: {source}</span>}
+        <div className="flex flex-wrap items-center gap-2 text-xs pt-0.5">
+          {source && <span className="text-slate-400 truncate max-w-xs" title={source}>Src: {source}</span>}
           {status && <StatusBadge status={status} />}
         </div>
       )}
@@ -126,7 +216,6 @@ export function TextInput({ label, value, onChange, placeholder, tooltip }: Text
     <div className="space-y-1">
       <label className="block text-sm font-medium text-slate-700" title={tooltip}>
         {label}
-        {tooltip && <span className="ml-1 text-xs text-slate-400 cursor-help" title={tooltip}>( ? )</span>}
       </label>
       <input
         type="text"
@@ -153,7 +242,6 @@ export function SelectInput({ label, value, onChange, options, tooltip }: Select
     <div className="space-y-1">
       <label className="block text-sm font-medium text-slate-700" title={tooltip}>
         {label}
-        {tooltip && <span className="ml-1 text-xs text-slate-400 cursor-help" title={tooltip}>( ? )</span>}
       </label>
       <select
         value={value}
@@ -194,31 +282,134 @@ export function ToggleInput({ label, checked, onChange }: ToggleInputProps) {
 }
 
 // ============================================================
-// STATUS BADGE
+// STATUS BADGE (11 Official Factor Classifications + Overrides)
 // ============================================================
 
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status }: { status: FactorClassification | string }) {
   const colors: Record<string, string> = {
-    'Engineering Assumption': 'bg-amber-100 text-amber-700 border-amber-200',
-    'Standard Requirement': 'bg-blue-100 text-blue-700 border-blue-200',
-    'Guidance Value': 'bg-cyan-100 text-cyan-700 border-cyan-200',
-    'Manufacturer Requirement': 'bg-purple-100 text-purple-700 border-purple-200',
-    'Client Requirement': 'bg-green-100 text-green-700 border-green-200',
-    'User Defined': 'bg-slate-100 text-slate-700 border-slate-200',
-    'Verification Required': 'bg-red-100 text-red-700 border-red-200',
+    'STATUTORY REQUIREMENT': 'bg-emerald-100 text-emerald-800 border-emerald-300',
+    'AUTHORITY REQUIREMENT': 'bg-blue-100 text-blue-800 border-blue-300',
+    'STANDARD REQUIREMENT': 'bg-indigo-100 text-indigo-800 border-indigo-300',
+    'PROJECT SPECIFICATION': 'bg-cyan-100 text-cyan-800 border-cyan-300',
+    'MANUFACTURER REQUIREMENT': 'bg-purple-100 text-purple-800 border-purple-300',
+    'ENGINEERING CALCULATION': 'bg-slate-100 text-slate-800 border-slate-300',
+    'PUBLISHED GUIDANCE': 'bg-sky-100 text-sky-800 border-sky-300',
+    'PROTOTYPE STANDARD FACTOR': 'bg-amber-100 text-amber-800 border-amber-300',
+    'ENGINEERING ASSUMPTION': 'bg-yellow-100 text-yellow-800 border-yellow-300',
+    'USER DEFINED': 'bg-zinc-100 text-zinc-800 border-zinc-300',
+    'VERIFICATION REQUIRED': 'bg-red-100 text-red-800 border-red-300',
+    'USER OVERRIDE': 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-300 font-bold',
+    // Legacy support
+    'Standard Requirement': 'bg-indigo-100 text-indigo-800 border-indigo-300',
+    'Guidance Value': 'bg-sky-100 text-sky-800 border-sky-300',
+    'Manufacturer Requirement': 'bg-purple-100 text-purple-800 border-purple-300',
+    'Client Requirement': 'bg-cyan-100 text-cyan-800 border-cyan-300',
+    'Engineering Assumption': 'bg-amber-100 text-amber-800 border-amber-300',
+    'User Defined': 'bg-zinc-100 text-zinc-800 border-zinc-300',
+    'Verification Required': 'bg-red-100 text-red-800 border-red-300',
   };
 
   const cls = colors[status] || 'bg-slate-100 text-slate-700 border-slate-200';
 
   return (
-    <span className={`px-2 py-0.5 text-xs rounded border ${cls}`}>
+    <span className={`px-2 py-0.5 text-[11px] rounded border font-medium whitespace-nowrap ${cls}`}>
       {status}
     </span>
   );
 }
 
 // ============================================================
-// RESULT CARD — shows a calculated value with formula transparency
+// ENGINEERING WARNING CARD (Section 58 format)
+// ============================================================
+
+export function WarningCard({ warning }: { warning: EngineeringWarning }) {
+  const configs = {
+    critical: {
+      border: 'border-red-400 bg-red-50/70',
+      badge: 'bg-red-600 text-white',
+      title: 'text-red-900',
+      icon: <Flame className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />,
+      label: 'CRITICAL',
+    },
+    warning: {
+      border: 'border-amber-400 bg-amber-50/70',
+      badge: 'bg-amber-600 text-white',
+      title: 'text-amber-900',
+      icon: <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />,
+      label: 'WARNING',
+    },
+    advisory: {
+      border: 'border-blue-400 bg-blue-50/70',
+      badge: 'bg-blue-600 text-white',
+      title: 'text-blue-900',
+      icon: <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />,
+      label: 'ADVISORY',
+    },
+    info: {
+      border: 'border-slate-300 bg-slate-50',
+      badge: 'bg-slate-600 text-white',
+      title: 'text-slate-800',
+      icon: <Activity className="w-5 h-5 text-slate-600 mt-0.5 flex-shrink-0" />,
+      label: 'INFORMATION',
+    },
+  };
+
+  const c = configs[warning.level] || configs.info;
+
+  return (
+    <div className={`p-4 rounded-lg border ${c.border} text-xs shadow-2xs space-y-2`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2">
+          {c.icon}
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${c.badge}`}>
+                {c.label}
+              </span>
+              <span className="text-slate-500 font-semibold">{warning.section}</span>
+            </div>
+            <h4 className={`text-sm font-bold mt-1 ${c.title}`}>{warning.message}</h4>
+          </div>
+        </div>
+      </div>
+
+      {(warning.currentValue || warning.referenceValue) && (
+        <div className="grid grid-cols-2 gap-2 bg-white/80 p-2 rounded border border-slate-200 font-mono text-[11px]">
+          <div>
+            <span className="text-slate-400 block text-[10px] uppercase font-sans">Current Value</span>
+            <span className="font-bold text-slate-800">{warning.currentValue || '—'}</span>
+          </div>
+          <div>
+            <span className="text-slate-400 block text-[10px] uppercase font-sans">Reference / Criterion</span>
+            <span className="font-bold text-slate-800">{warning.referenceValue || '—'}</span>
+          </div>
+        </div>
+      )}
+
+      {warning.whyItMatters && (
+        <p className="text-slate-700 leading-relaxed">
+          <strong>Why It Matters:</strong> {warning.whyItMatters}
+        </p>
+      )}
+
+      {warning.recommendedAction && (
+        <div className="bg-white/90 p-2 rounded text-blue-900 border border-blue-200">
+          <strong>Recommended Action:</strong> {warning.recommendedAction}
+        </div>
+      )}
+
+      {(warning.source || warning.classification) && (
+        <div className="flex items-center gap-2 pt-1 border-t border-slate-200/60 text-slate-500">
+          {warning.source && <span>Basis: {warning.source}</span>}
+          {warning.classification && <StatusBadge status={warning.classification} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// RESULT CARD
 // ============================================================
 
 interface ResultCardProps {
@@ -232,7 +423,16 @@ interface ResultCardProps {
   color?: 'blue' | 'green' | 'amber' | 'red' | 'slate' | 'cyan';
 }
 
-export function ResultCard({ label, value, unit, formula, substitution, interpretation, icon, color = 'blue' }: ResultCardProps) {
+export function ResultCard({
+  label,
+  value,
+  unit,
+  formula,
+  substitution,
+  interpretation,
+  icon,
+  color = 'blue',
+}: ResultCardProps) {
   const colorClasses = {
     blue: 'from-blue-50 to-blue-100/50 border-blue-200 text-blue-900',
     green: 'from-green-50 to-green-100/50 border-green-200 text-green-900',
@@ -266,7 +466,7 @@ export function ResultCard({ label, value, unit, formula, substitution, interpre
 }
 
 // ============================================================
-// CALCULATION DISPLAY — full formula transparency
+// CALCULATION DISPLAY
 // ============================================================
 
 interface CalcDisplayProps {
@@ -347,7 +547,7 @@ export function StatusIndicator({ status }: { status: 'green' | 'amber' | 'red' 
     amber: { color: 'bg-amber-500', text: 'MARGINAL', textCls: 'text-amber-700' },
     red: { color: 'bg-red-500', text: 'INADEQUATE', textCls: 'text-red-700' },
   };
-  const c = config[status];
+  const c = config[status] || config.amber;
   return (
     <span className="inline-flex items-center gap-2">
       <span className={`w-3 h-3 rounded-full ${c.color}`} />
@@ -364,7 +564,7 @@ interface SectionHeaderProps {
   title: string;
   subtitle?: string;
   icon?: ReactNode;
-  step?: number;
+  step?: number | string;
 }
 
 export function SectionHeader({ title, subtitle, icon, step }: SectionHeaderProps) {
@@ -372,7 +572,7 @@ export function SectionHeader({ title, subtitle, icon, step }: SectionHeaderProp
     <div className="mb-6">
       <div className="flex items-center gap-3">
         {step !== undefined && (
-          <span className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 text-white text-sm font-bold">
+          <span className="flex items-center justify-center min-w-[32px] h-8 px-2 rounded-full bg-blue-600 text-white text-sm font-bold">
             {step}
           </span>
         )}
@@ -392,7 +592,7 @@ export function SectionHeader({ title, subtitle, icon, step }: SectionHeaderProp
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`bg-white rounded-lg border border-slate-200 shadow-sm p-5 ${className}`}>
+    <div className={`bg-white rounded-lg border border-slate-200 shadow-xs p-5 ${className}`}>
       {children}
     </div>
   );
@@ -410,12 +610,12 @@ interface TabsProps {
 
 export function Tabs({ tabs, active, onChange }: TabsProps) {
   return (
-    <div className="flex gap-1 border-b border-slate-200">
+    <div className="flex gap-1 border-b border-slate-200 overflow-x-auto">
       {tabs.map((tab) => (
         <button
           key={tab.id}
           onClick={() => onChange(tab.id)}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
             active === tab.id
               ? 'border-blue-600 text-blue-600'
               : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -429,7 +629,7 @@ export function Tabs({ tabs, active, onChange }: TabsProps) {
 }
 
 // ============================================================
-// BAR CHART — simple CSS-based chart
+// BAR CHART
 // ============================================================
 
 interface BarChartProps {
@@ -444,7 +644,7 @@ export function BarChart({ data, unit = '', height = 200 }: BarChartProps) {
     <div className="space-y-2" style={{ minHeight: height }}>
       {data.map((d, i) => (
         <div key={i} className="flex items-center gap-3">
-          <span className="text-xs text-slate-600 w-32 truncate text-right">{d.label}</span>
+          <span className="text-xs text-slate-600 w-36 truncate text-right">{d.label}</span>
           <div className="flex-1 bg-slate-100 rounded-full h-6 relative overflow-hidden">
             <div
               className={`h-full rounded-full ${d.color || 'bg-blue-500'} transition-all duration-500`}

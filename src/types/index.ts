@@ -1,8 +1,25 @@
 // ============================================================
 // CORE TYPE DEFINITIONS — Smart Water Services Design System
+// WATER SERVICES PROTOTYPE STANDARD FACTORS — WPSF v1.0
 // ============================================================
 
+export type FactorClassification =
+  | 'STATUTORY REQUIREMENT'
+  | 'AUTHORITY REQUIREMENT'
+  | 'STANDARD REQUIREMENT'
+  | 'PROJECT SPECIFICATION'
+  | 'MANUFACTURER REQUIREMENT'
+  | 'ENGINEERING CALCULATION'
+  | 'PUBLISHED GUIDANCE'
+  | 'PROTOTYPE STANDARD FACTOR'
+  | 'ENGINEERING ASSUMPTION'
+  | 'USER DEFINED'
+  | 'VERIFICATION REQUIRED'
+  | 'USER OVERRIDE';
+
+// Backward compatibility alias
 export type DesignStatus =
+  | FactorClassification
   | 'Standard Requirement'
   | 'Guidance Value'
   | 'Manufacturer Requirement'
@@ -33,7 +50,7 @@ export type DesignStage =
 
 export type DesignMode = 'learning' | 'professional';
 
-export type PumpArrangement = 'Duty' | 'Duty/Standby' | 'Duty/Assist/Standby';
+export type PumpArrangement = 'Duty' | 'Duty/Standby' | 'Duty/Assist/Standby' | 'Variable-Speed Booster' | 'Transfer Pump';
 
 export type TankType = 'Underground' | 'Ground Level' | 'Roof' | 'Elevated';
 
@@ -41,8 +58,64 @@ export type TankShape = 'Rectangular' | 'Cylindrical';
 
 export type StatusColor = 'green' | 'amber' | 'red';
 
+export type DataConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
+
 // ----------------------------------------------------------------
-// Design Factor — every engineering value carries metadata
+// WPSF v1.0 Categories & Factors
+// ----------------------------------------------------------------
+
+export type WPSFCategory =
+  | 'Occupancy'
+  | 'Domestic Demand'
+  | 'Special Use'
+  | 'Diversity / Peaking'
+  | 'Storage'
+  | 'Pumping'
+  | 'Pipework'
+  | 'Wastewater'
+  | 'Rainwater'
+  | 'Greywater'
+  | 'Sustainability'
+  | 'Hot Water'
+  | 'Sub-metering';
+
+export interface FactorOverride {
+  factorId: string;
+  originalValue: number;
+  newValue: number;
+  reason: string;
+  source: string;
+  reference: string;
+  changedBy: string;
+  date: string;
+  revision: string;
+}
+
+export interface WPSFFactor {
+  id: string;
+  category: WPSFCategory;
+  name: string;
+  defaultValue: number;
+  value: number;
+  unit: string;
+  minAdvisory?: number;
+  maxAdvisory?: number;
+  classification: FactorClassification;
+  source: string;
+  reference: string;
+  designStage: string;
+  applicableBuildingType: string;
+  editable: boolean;
+  verificationRequired: boolean;
+  engineeringExplanation: string;
+  learningExplanation: string;
+  revision: string;
+  effectiveDate: string;
+  overrideDetails?: FactorOverride;
+}
+
+// ----------------------------------------------------------------
+// Design Factor (for legacy factor list & UI bindings)
 // ----------------------------------------------------------------
 
 export interface DesignFactor {
@@ -56,6 +129,9 @@ export interface DesignFactor {
   classification: DesignStatus;
   editable: boolean;
   remarks?: string;
+  minAdvisory?: number;
+  maxAdvisory?: number;
+  category?: WPSFCategory;
 }
 
 // ----------------------------------------------------------------
@@ -64,6 +140,7 @@ export interface DesignFactor {
 
 export interface ProjectInfo {
   projectName: string;
+  projectNumber?: string;
   client: string;
   consultant: string;
   designer: string;
@@ -299,6 +376,24 @@ export interface PipeDesign {
 }
 
 // ----------------------------------------------------------------
+// Hot Water Module
+// ----------------------------------------------------------------
+
+export interface HotWaterConfig {
+  enabled: boolean;
+  showerHotWaterPct: number; // % of shower demand
+  washbasinHotWaterPct: number;
+  kitchenHotWaterPct: number;
+  hostelHotWaterPct: number;
+  coldWaterTempC: number; // ambient °C
+  storageTempC: number; // 60°C for legionella safety
+  deliveryTempC: number; // 40-45°C
+  heatingTimeHours: number; // recovery hours
+  source: string;
+  classification: DesignStatus;
+}
+
+// ----------------------------------------------------------------
 // Wastewater
 // ----------------------------------------------------------------
 
@@ -323,7 +418,7 @@ export interface GreywaterConfig {
   laundryFlow: number; // L/day
   otherSinkFlow: number; // L/day
   treatmentEfficiency: number; // %
-  wcFlushingDemand: number; // eligible daily demand, independently confirmed
+  wcFlushingDemand: number; // eligible daily demand
   reuseForWCFlushing: boolean;
   reuseForIrrigation: boolean;
   reuseForCleaning: boolean;
@@ -362,6 +457,27 @@ export interface FireWaterConfig {
   sprinklerRequired: boolean;
   fireFlow: number; // L/min
   fireDuration: number; // hours
+  source: string;
+  classification: DesignStatus;
+}
+
+// ----------------------------------------------------------------
+// Sub-metering & Monitoring
+// ----------------------------------------------------------------
+
+export interface SubMeterZone {
+  id: string;
+  name: string;
+  description: string;
+  meterType: 'Electromagnetic' | 'Ultrasonic' | 'Multi-jet' | 'Turbine';
+  installed: boolean;
+  baselineDemandL: number; // L/day
+  actualOrSimulatedDemandL: number; // L/day
+}
+
+export interface SubMeteringConfig {
+  enabled: boolean;
+  zones: SubMeterZone[];
   source: string;
   classification: DesignStatus;
 }
@@ -406,6 +522,9 @@ export interface Assumption {
   reference: string;
   verificationRequired: boolean;
   remarks: string;
+  classification?: FactorClassification;
+  risk?: 'LOW' | 'MEDIUM' | 'HIGH';
+  status?: 'ACTIVE' | 'VERIFIED' | 'OVERRIDDEN';
 }
 
 // ----------------------------------------------------------------
@@ -424,6 +543,8 @@ export interface CalcRegisterEntry {
   result: string;
   status: DesignStatus;
   notes: string;
+  engineeringInterpretation?: string;
+  verificationStatus?: string;
 }
 
 // ----------------------------------------------------------------
@@ -433,8 +554,9 @@ export interface CalcRegisterEntry {
 export interface Recommendation {
   id: string;
   text: string;
-  category: 'Efficiency' | 'Storage' | 'Pumps' | 'Monitoring' | 'Sustainability' | 'Safety';
+  category: 'Efficiency' | 'Storage' | 'Pumps' | 'Monitoring' | 'Sustainability' | 'Safety' | 'Hydraulics';
   priority: 'High' | 'Medium' | 'Low';
+  triggerCondition?: string;
 }
 
 // ----------------------------------------------------------------
@@ -443,9 +565,15 @@ export interface Recommendation {
 
 export interface EngineeringWarning {
   id: string;
-  level: 'critical' | 'warning' | 'info';
-  message: string;
+  level: 'critical' | 'warning' | 'advisory' | 'info';
+  message: string; // Issue title
   section: string;
+  currentValue?: string;
+  referenceValue?: string;
+  whyItMatters?: string;
+  recommendedAction?: string;
+  source?: string;
+  classification?: FactorClassification;
 }
 
 // ----------------------------------------------------------------
@@ -479,17 +607,24 @@ export interface ProjectData {
   tankDimensions: TankDimension[];
   pump: PumpConfig;
   pipes: PipeDesign[];
+  hotWater: HotWaterConfig;
   wastewater: WastewaterConfig;
   greywater: GreywaterConfig;
   rainwater: RainwaterConfig;
   fireWater: FireWaterConfig;
+  subMetering: SubMeteringConfig;
   futureExpansion: FutureExpansion;
   standards: StandardReference[];
   designMode: DesignMode;
+
+  // Controlled Prototype Factor System
+  wpsfFactors: WPSFFactor[];
+  factorOverrides: FactorOverride[];
+  wpsfVersion: string;
 }
 
 // ----------------------------------------------------------------
-// Calculation Results — comprehensive output model
+// Calculation Results — comprehensive output models
 // ----------------------------------------------------------------
 
 export interface OccupancyResult {
@@ -525,6 +660,8 @@ export interface WaterBalanceResult {
   totalDemand: number;
   totalWastewater: number;
   totalLoss: number;
+  balanceDiscrepancy: number; // Water In - (Water Out + Storage Change)
+  balanceStatus: 'BALANCED' | 'DISCREPANCY';
 }
 
 export interface ADDResult {
@@ -554,6 +691,8 @@ export interface PeakFlowResult {
   formula: string;
   substitution: string;
   fixtureBreakdown: { type: string; qty: number; fu: number; totalFU: number }[];
+  peakProcessFlowLps: number;
+  combinedDesignPeakLps: number;
 }
 
 export interface StorageResult {
@@ -566,6 +705,7 @@ export interface StorageResult {
   formula: string;
   substitution: string;
   check: boolean;
+  statusText: string;
 }
 
 export interface TankDimensionResult {
@@ -574,6 +714,7 @@ export interface TankDimensionResult {
   effectiveVolume: number;
   surplusDeficiency: number;
   status: StatusColor;
+  statusText: string;
 }
 
 export interface PumpResult {
@@ -584,6 +725,7 @@ export interface PumpResult {
   motorPower: number; // kW
   formula: string;
   substitution: string;
+  curveVerified: boolean;
 }
 
 export interface PipeResult {
@@ -596,6 +738,16 @@ export interface PipeResult {
   warnings: string[];
 }
 
+export interface HotWaterResult {
+  dailyHotWaterDemandL: number;
+  dailyHotWaterDemandM3: number;
+  requiredStorageL: number;
+  requiredStorageM3: number;
+  heatingLoadKW: number;
+  formula: string;
+  substitution: string;
+}
+
 export interface WastewaterResult {
   indoorDemand: number;
   sewerReturn: number; // L/day
@@ -603,6 +755,7 @@ export interface WastewaterResult {
   wastewaterM3Day: number;
   wastewaterM3Month: number;
   wastewaterM3Year: number;
+  peakWastewaterFlowLps: number;
   formula: string;
   substitution: string;
 }
@@ -613,6 +766,9 @@ export interface GreywaterResult {
   reuseDemand: number;
   potableWaterReduction: number; // L/day
   potableReductionPct: number;
+  greywaterBalance: number; // Supply - Demand (>0 excess, <0 make-up needed)
+  excessLday: number;
+  potableMakeupLday: number;
   formula: string;
   substitution: string;
 }
@@ -622,6 +778,9 @@ export interface RainwaterResult {
   monthlyHarvested: number[]; // m³/month
   nonPotableOffset: number; // L/day
   potableSavingPct: number;
+  monthlyNonPotableDemandM3: number[];
+  monthlySupplyDemandDeltaM3: number[];
+  tankUtilizationPct: number;
   formula: string;
   substitution: string;
 }
@@ -632,6 +791,71 @@ export interface FireWaterResult {
   fireWaterStorage: number; // m³
   formula: string;
   substitution: string;
+  criteriaVerified: boolean;
+}
+
+export interface SubMeteringResult {
+  totalMeteredDemandL: number;
+  zones: {
+    id: string;
+    name: string;
+    consumptionL: number;
+    pct: number;
+    anomalyStatus: 'Normal' | 'Elevated' | 'Potential Leak' | 'Under-consumption';
+    notes: string;
+  }[];
+  unaccountedDifferenceL: number;
+  unaccountedPct: number;
+}
+
+export interface SmartMonitoringData {
+  simulated: boolean;
+  lastUpdated: string;
+  flowMeterCurrentLps: number;
+  tankLevels: {
+    tankId: string;
+    label: string;
+    currentLevelPct: number;
+    currentVolumeM3: number;
+    status: 'Normal' | 'Low Alarm' | 'Overflow Alarm';
+  }[];
+  distributionPressureBar: number;
+  pumpRunningStatus: {
+    pumpId: string;
+    label: string;
+    running: boolean;
+    status: 'Running' | 'Standby' | 'Fault';
+  }[];
+  leakageAlert: boolean;
+  overflowAlert: boolean;
+}
+
+export interface CriticalFixtureResult {
+  fixtureLabel: string;
+  elevationM: number;
+  runDistanceM: number;
+  requiredFlowLps: number;
+  requiredPressureM: number;
+  calculatedResidualPressureM: number;
+  status: 'ADEQUATE' | 'INSUFFICIENT RESIDUAL PRESSURE';
+  recommendedAction: string;
+}
+
+export interface SubsystemValidationItem {
+  id: string;
+  subsystem: string;
+  status: 'PASS' | 'REVIEW';
+  finding: string;
+  criteria: string;
+}
+
+export interface SystemValidationResult {
+  items: SubsystemValidationItem[];
+  overallStatus: 'READY FOR PROFESSIONAL PROTOTYPE USE' | 'REVIEW REQUIRED';
+  passCount: number;
+  reviewCount: number;
+  dataConfidence: DataConfidence;
+  confidenceNote: string;
 }
 
 export interface SustainabilityResult {
@@ -643,6 +867,24 @@ export interface SustainabilityResult {
   wastewaterReusePct: number;
   annualUtilityConsumption: number; // m³/year
   efficiencyScore: number; // 0-100
+}
+
+export interface ModuleCompleteness {
+  projectInfo: number;
+  occupancy: number;
+  dailyDemand: number;
+  peakDemand: number;
+  storage: number;
+  pumping: number;
+  pipework: number;
+  hotWater: number;
+  wastewater: number;
+  greywater: number;
+  rainwater: number;
+  fireWater: number;
+  standards: number;
+  sustainability: number;
+  reports: number;
 }
 
 export interface AllResults {
@@ -657,17 +899,25 @@ export interface AllResults {
   tankDimensions: TankDimensionResult[];
   pump: PumpResult | null;
   pipes: PipeResult[];
+  hotWater: HotWaterResult | null;
   wastewater: WastewaterResult | null;
   greywater: GreywaterResult | null;
   rainwater: RainwaterResult | null;
   fireWater: FireWaterResult | null;
+  subMetering: SubMeteringResult | null;
+  smartMonitoring: SmartMonitoringData;
+  criticalFixture: CriticalFixtureResult | null;
   sustainability: SustainabilityResult | null;
+  systemValidation: SystemValidationResult;
+  moduleCompleteness: ModuleCompleteness;
+  dataConfidence: DataConfidence;
   totalPopulation: number;
   warnings: EngineeringWarning[];
   recommendations: Recommendation[];
   assumptions: Assumption[];
   calcRegister: CalcRegisterEntry[];
   checklist: ChecklistItem[];
+  wpsfRegister: WPSFFactor[];
   completionPct: number;
   overallStatus: 'PASS' | 'REVIEW' | 'INCOMPLETE';
 }
