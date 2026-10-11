@@ -19,6 +19,11 @@ import {
   WarningCard,
   EngineeringNoticeBanner,
   PrinciplesBanner,
+  StudentCalculationCard,
+  VisualTankCrossSection,
+  VisualPumpSystemCurve,
+  VisualWaterBalanceFlow,
+  VisualThermalSpectrum,
 } from '@/components/ui';
 import {
   Users, Droplets, FlaskConical, Warehouse, Fuel,
@@ -139,6 +144,48 @@ export function StepOccupancy() {
       <EduCard title="What should I enter?" icon="what">
         <p>Enter the number of people in each group (students, staff, hostel residents, visitors, etc.). Adjust the consumption factor if you have project-specific data. The default values are preliminary engineering allowances for tropical climate institutional buildings.</p>
       </EduCard>
+
+      <StudentCalculationCard
+        title="Student Derivation: Occupancy Water Demand Accumulation"
+        standardRef="BS 6465-1 / CIBSE Guide G / SLS 1373"
+        governingFormula="Q_group = N_i × q_i × (d_i / 7)   |   Q_total = Σ Q_group"
+        formulaVariables={[
+          { symbol: 'N_total', meaning: 'Total Facility Population', unit: 'persons', value: results.totalPopulation },
+          { symbol: 'Q_total', meaning: 'Combined Occupancy Demand', unit: 'm³/day', value: (results.occupancy.reduce((s, r) => s + r.dailyDemand, 0) / 1000).toFixed(2) },
+          { symbol: 'q_weighted', meaning: 'Effective Weighted Per-Capita Demand', unit: 'L/p/d', value: results.totalPopulation > 0 ? (results.occupancy.reduce((s, r) => s + r.dailyDemand, 0) / results.totalPopulation).toFixed(1) : 0 },
+          { symbol: 'Groups', meaning: 'Configured Population Subgroups', unit: 'count', value: project.occupancy.length },
+        ]}
+        steps={[
+          {
+            stepNumber: 1,
+            title: 'Subgroup Population & Per-Capita Disaggregation',
+            description: 'Disaggregate site population into specific activity cohorts (Day Students, Staff, Hostel Residents). Water use varies by an order of magnitude between day users and residential users.',
+            formula: 'N_total = N_day + N_residential + N_other',
+            mathSubstitution: `Total = ${project.occupancy.map(g => `${g.name} (${g.count})`).join(' + ')}`,
+            intermediateResult: `${results.totalPopulation}`,
+            unit: 'persons',
+          },
+          {
+            stepNumber: 2,
+            title: 'Weekly Attendance Duty Cycle Normalization',
+            description: 'Apply operational days per week (d/7) to account for institutions operating 5 days/week vs 7 days/week residential hostels.',
+            formula: 'Q_daily = Σ [N_i × q_i × (d_i / 7)]',
+            mathSubstitution: `${project.occupancy.slice(0, 3).map(g => `${g.count} × ${g.consumptionFactor} × (${g.daysPerWeek}/7)`).join(' + ')}${project.occupancy.length > 3 ? ' + ...' : ''}`,
+            intermediateResult: `${(results.occupancy.reduce((s, r) => s + r.dailyDemand, 0)).toFixed(0)}`,
+            unit: 'L/day',
+          },
+          {
+            stepNumber: 3,
+            title: 'SI Unit Volume Conversion to Cubic Metres',
+            description: 'Convert daily litres to engineering volumetric design units (m³/day) for water storage and civil works sizing.',
+            formula: 'V (m³/day) = Q (L/day) / 1000',
+            mathSubstitution: `${(results.occupancy.reduce((s, r) => s + r.dailyDemand, 0)).toFixed(0)} L/day / 1000`,
+            intermediateResult: `${(results.occupancy.reduce((s, r) => s + r.dailyDemand, 0) / 1000).toFixed(2)}`,
+            unit: 'm³/day',
+          },
+        ]}
+        engineeringRuleOfThumb="Day users (schools/offices) require 25–45 L/person/day for ablution, WC flushing, and drinking. Residential hostel occupants require 120–150 L/person/day because of personal showers, meal cooking, and laundry. Misclassifying residential occupants as day users leads to severe water tank starvation!"
+      />
 
       {categories.map((cat) => {
         const groups = project.occupancy.filter((g) => g.category === cat);
@@ -262,6 +309,50 @@ export function StepDomesticWater() {
             formula={results.domestic.formula}
             substitution={results.domestic.substitution}
           />
+
+          <StudentCalculationCard
+            title="Student Derivation: Average Daily Demand (ADD) to Maximum Day Demand (MDD)"
+            standardRef="CIBSE Guide G / AWWA M32 Water Distribution Sizing"
+            governingFormula="MDD = ADD × [1 + Loss%] × K_day × [1 + Exp%]"
+            formulaVariables={[
+              { symbol: 'ADD', meaning: 'Average Daily Base Demand', unit: 'm³/day', value: (results.domestic.totalDemand / 1000).toFixed(2) },
+              { symbol: 'Loss%', meaning: 'Internal Plumbing Loss Allowance', unit: '%', value: project.demandBasis.lossAllowancePct },
+              { symbol: 'K_day', meaning: 'Maximum Day Peaking Factor', unit: 'ratio', value: project.demandBasis.maxDayFactor },
+              { symbol: 'Exp%', meaning: 'Future Expansion Allowance', unit: '%', value: project.futureExpansion.enabled ? project.futureExpansion.percentageGrowth : 0 },
+              { symbol: 'MDD', meaning: 'Maximum Day Design Flow', unit: 'm³/day', value: ((results.domestic.totalDemand / 1000) * (1 + project.demandBasis.lossAllowancePct / 100) * project.demandBasis.maxDayFactor * (1 + (project.futureExpansion.enabled ? project.futureExpansion.percentageGrowth : 0) / 100)).toFixed(2) },
+            ]}
+            steps={[
+              {
+                stepNumber: 1,
+                title: 'Domestic Base Consumption Accumulation',
+                description: 'Aggregate base domestic consumption from selected engineering method (Method A per-capita or Method B fixture end-use schedule).',
+                formula: 'ADD = Σ (N_i × q_i) / 1000',
+                mathSubstitution: `ADD = ${(results.domestic.totalDemand).toFixed(0)} L/day / 1000`,
+                intermediateResult: (results.domestic.totalDemand / 1000).toFixed(2),
+                unit: 'm³/day',
+              },
+              {
+                stepNumber: 2,
+                title: 'Plumbing Distribution Leakage & Unaccounted-For Water Allowance',
+                description: 'Factor in internal pipe network losses, minor valve weeping, and cleaning waste (typically 5% to 10%).',
+                formula: 'Q_net = ADD × (1 + Loss% / 100)',
+                mathSubstitution: `${(results.domestic.totalDemand / 1000).toFixed(2)} × (1 + ${project.demandBasis.lossAllowancePct} / 100)`,
+                intermediateResult: ((results.domestic.totalDemand / 1000) * (1 + project.demandBasis.lossAllowancePct / 100)).toFixed(2),
+                unit: 'm³/day',
+              },
+              {
+                stepNumber: 3,
+                title: 'Peak Day Demand (MDD) Transformation',
+                description: 'Apply maximum day factor K_day to ensure water infrastructure does not suffer shortage during peak summer days or high-occupancy events.',
+                formula: 'MDD = Q_net × K_day × (1 + Exp% / 100)',
+                mathSubstitution: `${((results.domestic.totalDemand / 1000) * (1 + project.demandBasis.lossAllowancePct / 100)).toFixed(2)} × ${project.demandBasis.maxDayFactor} × (1 + ${(project.futureExpansion.enabled ? project.futureExpansion.percentageGrowth : 0)} / 100)`,
+                intermediateResult: ((results.domestic.totalDemand / 1000) * (1 + project.demandBasis.lossAllowancePct / 100) * project.demandBasis.maxDayFactor * (1 + (project.futureExpansion.enabled ? project.futureExpansion.percentageGrowth : 0) / 100)).toFixed(2),
+                unit: 'm³/day',
+              },
+            ]}
+            engineeringRuleOfThumb="Average Daily Demand (ADD) is used for annual municipal water billing and rainwater feasibility. Maximum Day Demand (MDD) must be used for sizing water storage tanks, water meter connections, and bulk transfer pumps to guarantee supply during summer peak demand periods."
+          />
+
           {dw.method === 'B' && (
             <Card>
               <h4 className="text-sm font-semibold mb-3">End-Use Breakdown</h4>
@@ -421,6 +512,56 @@ export function StepWaterBalance() {
             <ResultCard label="Wastewater" value={(results.waterBalance.totalWastewater / 1000).toFixed(2)} unit="m³/day" color="red" />
           </div>
 
+          <VisualWaterBalanceFlow
+            sources={results.waterBalance.sources}
+            consumption={results.waterBalance.consumption}
+            outflows={results.waterBalance.outflows}
+            totalDemand={results.waterBalance.totalDemand}
+          />
+
+          <StudentCalculationCard
+            title="Student Principle: Law of Conservation of Mass (Site Water Balance)"
+            standardRef="ISO 14046 Water Balance / CIBSE Guide G / LEED WE"
+            governingFormula="Σ Q_in (Sources) = Σ Q_consumed + Σ Q_evaporated + Σ Q_wastewater (Outflows)"
+            formulaVariables={[
+              { symbol: 'Q_in', meaning: 'Total Water Inflow Sources', unit: 'm³/day', value: (results.waterBalance.totalSupply / 1000).toFixed(2) },
+              { symbol: 'Q_demand', meaning: 'Combined Facility Demand', unit: 'm³/day', value: (results.waterBalance.totalDemand / 1000).toFixed(2) },
+              { symbol: 'Q_out', meaning: 'Sanitary Wastewater Outflow', unit: 'm³/day', value: (results.waterBalance.totalWastewater / 1000).toFixed(2) },
+              { symbol: 'Losses', meaning: 'Consumptive & Evaporative Losses', unit: 'm³/day', value: Math.max(0, (results.waterBalance.totalDemand - results.waterBalance.totalWastewater) / 1000).toFixed(2) },
+            ]}
+            steps={[
+              {
+                stepNumber: 1,
+                title: 'Water Source Inflow Inventory',
+                description: 'Sum all incoming water streams supplying the facility boundary (Potable utility mains, on-site rainwater harvesting, and recycled greywater).',
+                formula: 'Q_supply = Q_mains + Q_rainwater + Q_greywater',
+                mathSubstitution: `${results.waterBalance.sources.map(s => `${s.name}: ${s.value} L/d`).join(' | ')}`,
+                intermediateResult: (results.waterBalance.totalSupply / 1000).toFixed(2),
+                unit: 'm³/day',
+              },
+              {
+                stepNumber: 2,
+                title: 'Internal Building & External Site Consumption Breakdown',
+                description: 'Aggregate domestic occupant demands, special workshop processes, vehicle wash bays, and landscape irrigation zones.',
+                formula: 'Q_demand = Q_domestic + Q_special + Q_irrigation',
+                mathSubstitution: `${results.waterBalance.consumption.map(c => `${c.name}: ${c.value} L/d`).join(' | ')}`,
+                intermediateResult: (results.waterBalance.totalDemand / 1000).toFixed(2),
+                unit: 'm³/day',
+              },
+              {
+                stepNumber: 3,
+                title: 'Discharge Conservation & Evaporative Loss Separation',
+                description: 'Identify water that returns to sewer networks versus water consumed by human ingestion, plant evapotranspiration, and surface evaporation.',
+                formula: 'Q_outflow = Q_wastewater = Σ (Q_indoor × SewerReturn%)',
+                mathSubstitution: `${results.waterBalance.outflows.map(o => `${o.name}: ${o.value} L/d`).join(' | ')}`,
+                intermediateResult: (results.waterBalance.totalWastewater / 1000).toFixed(2),
+                unit: 'm³/day',
+                notes: 'Irrigation water transpires into the atmosphere and never enters the sewer; domestic ablution returns at 80% to 90%',
+              },
+            ]}
+            engineeringRuleOfThumb="Mass conservation is fundamental: inputs must balance consumption plus outflows. Rainwater harvesting and greywater reuse directly substitute for potable municipal water, cutting utility bills and reducing environmental water extraction."
+          />
+
           <Card>
             <h3 className="text-sm font-semibold mb-3">Water Sources</h3>
             <BarChart data={results.waterBalance.sources.map((s) => ({ label: s.name, value: s.value }))} unit="L/day" />
@@ -513,12 +654,57 @@ export function StepPeakDemand() {
         {!results.peakFlow && <p role="status" className="mt-3 text-amber-700">Additional design information required. No probable peak flow has been confirmed.</p>}
       </Card>
       {results.peakFlow && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <ResultCard label="Total Loading Units" value={results.peakFlow.totalFixtureUnits} unit="LU" color="slate" />
-          <ResultCard label="Peak Flow" value={results.peakFlow.probablePeakFlow} unit="L/s" color="blue" formula={results.peakFlow.formula} substitution={results.peakFlow.substitution} />
-          <ResultCard label="Peak Flow" value={results.peakFlow.peakFlowLpm} unit="L/min" color="cyan" />
-          <ResultCard label="Peak Flow" value={results.peakFlow.peakFlowM3h} unit="m³/h" color="green" />
-        </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <ResultCard label="Total Loading Units" value={results.peakFlow.totalFixtureUnits} unit="LU" color="slate" />
+            <ResultCard label="Peak Flow" value={results.peakFlow.probablePeakFlow} unit="L/s" color="blue" formula={results.peakFlow.formula} substitution={results.peakFlow.substitution} />
+            <ResultCard label="Peak Flow" value={results.peakFlow.peakFlowLpm} unit="L/min" color="cyan" />
+            <ResultCard label="Peak Flow" value={results.peakFlow.peakFlowM3h} unit="m³/h" color="green" />
+          </div>
+
+          <StudentCalculationCard
+            title="Student Statistical Principle: Hunter's Curve Loading Unit Diversity"
+            standardRef="BS EN 806-3 / CIBSE Guide G / SLS 1373"
+            governingFormula="Q_peak = f(Σ LU) << Σ (n_i × q_nominal)   |   Q (m³/h) = Q (L/s) × 3.6"
+            formulaVariables={[
+              { symbol: 'Σ LU', meaning: 'Total Fixture Loading Units', unit: 'LU', value: results.peakFlow.totalFixtureUnits },
+              { symbol: 'Q_peak', meaning: 'Probable Simultaneous Peak Flow', unit: 'L/s', value: results.peakFlow.probablePeakFlow },
+              { symbol: 'Q_lpm', meaning: 'Peak Flow in Litres per Minute', unit: 'L/min', value: results.peakFlow.peakFlowLpm },
+              { symbol: 'Q_m3h', meaning: 'Peak Flow in Cubic Metres per Hour', unit: 'm³/h', value: results.peakFlow.peakFlowM3h },
+            ]}
+            steps={[
+              {
+                stepNumber: 1,
+                title: 'Fixture Unit Loading Schedule Accumulation',
+                description: 'Aggregate loading units across all plumbing appliances according to their frequency of operation and hydraulic draw.',
+                formula: 'Σ LU = Σ (Quantity_i × LoadingUnit_i)',
+                mathSubstitution: `Total = ${project.fixtures.slice(0, 3).map(f => `${f.quantity} × ${f.loadingUnit} (${f.type})`).join(' + ')}${project.fixtures.length > 3 ? ' + ...' : ''}`,
+                intermediateResult: `${results.peakFlow.totalFixtureUnits}`,
+                unit: 'LU',
+              },
+              {
+                stepNumber: 2,
+                title: 'Binomial Probability & Simultaneity Diversity Curve',
+                description: 'Apply diversity reduction factor based on Dr. Roy B. Hunter’s binomial distribution principle: appliances are open for only a fraction of any given hour.',
+                formula: 'Q_peak = Hunter_Curve(Σ LU)',
+                mathSubstitution: `Derived curve output for ${results.peakFlow.totalFixtureUnits} LU from ${project.peakDesign.source}`,
+                intermediateResult: `${results.peakFlow.probablePeakFlow}`,
+                unit: 'L/s',
+                notes: 'Drastically smaller than arithmetic sum of maximum fixture capacities',
+              },
+              {
+                stepNumber: 3,
+                title: 'Hydraulic Pumping Unit Interconversions',
+                description: 'Convert instantaneous L/s into standard plumbing pump schedule ratings (m³/h and L/min).',
+                formula: 'Q (L/min) = Q (L/s) × 60   |   Q (m³/h) = Q (L/s) × 3.6',
+                mathSubstitution: `${results.peakFlow.probablePeakFlow} × 60 = ${results.peakFlow.peakFlowLpm} L/min  |  ${results.peakFlow.probablePeakFlow} × 3.6 = ${results.peakFlow.peakFlowM3h} m³/h`,
+                intermediateResult: `${results.peakFlow.peakFlowM3h}`,
+                unit: 'm³/h',
+              },
+            ]}
+            engineeringRuleOfThumb="Never size pumps or pipes by summing the full flow rate of every fixture! That arithmetic fallacy oversizes systems by 500% to 800%, causing water stagnation, acoustic hammering, and rapid pump burnouts due to severe cycling."
+          />
+        </>
       )}
 
       <Card>
@@ -631,6 +817,84 @@ export function StepStorage() {
             <ResultCard label="Ground Tank" value={results.storage.groundTank.toFixed(2)} unit="m³" color="cyan" />
             <ResultCard label="Elevated Tank" value={results.storage.elevatedTank.toFixed(2)} unit="m³" color="green" />
           </div>
+
+          <StudentCalculationCard
+            title="Student Derivation: Required Storage Capacity & Geometric Compartment Sizing"
+            standardRef="BS 8551 / SLS 1373 / CIBSE Guide G Section 2"
+            governingFormula="V_req = Q_day × T_duration × [1 + R_res% + R_op%]   |   V_eff = L × W × D_eff"
+            formulaVariables={[
+              { symbol: 'Q_day', meaning: 'Daily Potable Water Demand', unit: 'm³/day', value: (results.storage.dailyDemand / 1000).toFixed(2) },
+              { symbol: 'T_dur', meaning: 'Storage Retention Duration', unit: 'days', value: project.storage.storageDuration },
+              { symbol: 'R_res%', meaning: 'Emergency Supply Interruption Reserve', unit: '%', value: project.storage.reserveAllowance },
+              { symbol: 'R_op%', meaning: 'Pump Balancing Operational Reserve', unit: '%', value: project.storage.operationalReserve },
+              { symbol: 'V_req', meaning: 'Total Required Site Storage', unit: 'm³', value: results.storage.requiredCapacity.toFixed(2) },
+            ]}
+            steps={[
+              {
+                stepNumber: 1,
+                title: 'Base Daily Storage Requirement',
+                description: 'Multiply daily domestic water demand by project design retention duration (typically 24 hours to 48 hours for tropical educational & institutional campuses).',
+                formula: 'V_base = Q_daily × T_duration',
+                mathSubstitution: `${(results.storage.dailyDemand / 1000).toFixed(2)} m³/day × ${project.storage.storageDuration} days`,
+                intermediateResult: ((results.storage.dailyDemand / 1000) * project.storage.storageDuration).toFixed(2),
+                unit: 'm³',
+              },
+              {
+                stepNumber: 2,
+                title: 'Operational & Emergency Contingency Cushion',
+                description: 'Incorporate emergency reserve margin (safeguard against municipal pipe breaks) and operational reserve (cushion for transfer pump cycling).',
+                formula: 'V_req = V_base × [1 + (R_res + R_op) / 100]',
+                mathSubstitution: `${((results.storage.dailyDemand / 1000) * project.storage.storageDuration).toFixed(2)} × [1 + (${project.storage.reserveAllowance} + ${project.storage.operationalReserve}) / 100]`,
+                intermediateResult: results.storage.requiredCapacity.toFixed(2),
+                unit: 'm³',
+              },
+              {
+                stepNumber: 3,
+                title: 'Underground Sump & Overhead Tank Splitting',
+                description: 'Distribute total volume into a low-level bulk suction break tank (Underground / Ground) and a top-level distribution cistern (Roof Tank / Elevated).',
+                formula: 'V_UG = V_req × UG%   |   V_Roof = V_req × Roof%',
+                mathSubstitution: `UG: ${results.storage.requiredCapacity.toFixed(2)} × ${project.storage.undergroundTankPct}% = ${results.storage.undergroundTank.toFixed(2)} m³  |  Roof: ${results.storage.requiredCapacity.toFixed(2)} × ${project.storage.roofTankPct}% = ${results.storage.roofTank.toFixed(2)} m³`,
+                intermediateResult: `${results.storage.undergroundTank.toFixed(1)} / ${results.storage.roofTank.toFixed(1)}`,
+                unit: 'm³ (UG/Roof)',
+              },
+              {
+                stepNumber: 4,
+                title: 'Structural Water Depth & Air Gap Freeboard Verification',
+                description: 'Effective usable capacity must account only for water between suction bottom clearance and top overflow level. Minimum 300 mm freeboard air gap is mandatory to prevent backflow contamination.',
+                formula: 'V_eff = L × W × D_eff   |   V_gross = L × W × (D_eff + Freeboard)',
+                mathSubstitution: 'Refer to individual compartment verification cards below',
+                intermediateResult: `${results.tankDimensions.reduce((s, td) => s + td.effectiveVolume, 0).toFixed(2)}`,
+                unit: 'm³ (Total Built)',
+              },
+            ]}
+            engineeringRuleOfThumb="Always provide twin compartments (50/50 split) for both underground and overhead tanks! This permits routine de-sludging, chemical disinfection, and valve maintenance without interrupting potable water to building occupants."
+          />
+
+          {/* Visual Physical Cross-Sections */}
+          {results.tankDimensions.length > 0 && (
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Visual Cross-Section & Compartment Sizing Simulations
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {results.tankDimensions.map((td, i) => (
+                  <VisualTankCrossSection
+                    key={td.tank.id || i}
+                    label={`${td.tank.label} (${td.tank.tankType})`}
+                    shape={td.tank.shape}
+                    length={td.tank.length}
+                    width={td.tank.width}
+                    effectiveDepth={td.tank.effectiveDepth}
+                    freeboard={td.tank.freeboard}
+                    effectiveVolume={td.effectiveVolume}
+                    grossVolume={td.grossVolume}
+                    requiredCapacity={td.tank.requiredCapacity}
+                    status={td.status}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* TANK DIMENSIONS */}
           <Card>
@@ -750,6 +1014,64 @@ export function StepPumpDesign() {
             <ResultCard label="Hydraulic Power" value={results.pump.hydraulicPower} unit="kW" color="amber" />
             <ResultCard label="Motor Power" value={results.pump.motorPower} unit="kW" color="green" />
           </div>
+
+          <VisualPumpSystemCurve
+            designFlowLps={results.pump.designFlow}
+            designFlowM3h={results.pump.designFlowM3h}
+            tdhM={results.pump.tdh}
+            staticHeadM={p.staticHead}
+            frictionHeadM={p.pipeFriction}
+            residualHeadM={p.requiredResidualPressure}
+            hydraulicPowerKw={results.pump.hydraulicPower}
+            motorPowerKw={results.pump.motorPower}
+            pumpEfficiencyPct={p.pumpEfficiency}
+            motorEfficiencyPct={p.motorEfficiency}
+          />
+
+          <StudentCalculationCard
+            title="Student Derivation: Total Dynamic Head (TDH) & Pump Motor Power Sizing"
+            standardRef="ISO 9906 / BS EN 806-4 / Hydraulic Institute Standards"
+            governingFormula="TDH = [H_static + h_f + h_fit + H_res] × [1 + Margin%]   |   P_motor = [ρ × g × Q × TDH] / [1000 × η_pump × η_motor]"
+            formulaVariables={[
+              { symbol: 'Q_des', meaning: 'Operating Duty Flow', unit: 'm³/h', value: results.pump.designFlowM3h },
+              { symbol: 'TDH', meaning: 'Total Dynamic Head', unit: 'm', value: results.pump.tdh },
+              { symbol: 'H_static', meaning: 'Physical Static Elevation Lift', unit: 'm', value: p.staticHead },
+              { symbol: 'P_hyd', meaning: 'Hydraulic Water Power Output', unit: 'kW', value: results.pump.hydraulicPower },
+              { symbol: 'P_motor', meaning: 'Shaft Motor Brake Power', unit: 'kW', value: results.pump.motorPower },
+              { symbol: 'η_pump', meaning: 'Pump Impeller Hydraulic Efficiency', unit: '%', value: p.pumpEfficiency },
+              { symbol: 'η_motor', meaning: 'Electric Motor Wire-to-Shaft Efficiency', unit: '%', value: p.motorEfficiency },
+            ]}
+            steps={[
+              {
+                stepNumber: 1,
+                title: 'Total Dynamic Head (TDH) Summation',
+                description: 'Calculate pump required lift by summing static elevation rise, pipe friction, localized fitting resistance, and terminal delivery pressure.',
+                formula: 'TDH = (H_static + h_friction + h_fittings + H_residual) × (1 + Margin% / 100)',
+                mathSubstitution: `(${p.staticHead}m + ${p.pipeFriction}m + ${p.fittingLosses}m + ${p.requiredResidualPressure}m) × (1 + ${p.safetyMargin}/100)`,
+                intermediateResult: results.pump.tdh.toFixed(2),
+                unit: 'm head',
+              },
+              {
+                stepNumber: 2,
+                title: 'Hydraulic Water Power Output (P_hyd)',
+                description: 'Calculate theoretical mechanical work performed on fluid mass per second.',
+                formula: 'P_hyd (kW) = (ρ × g × Q × TDH) / 1000 = (9.81 × Q_Lps × TDH) / 1000',
+                mathSubstitution: `(1000 kg/m³ × 9.81 m/s² × (${results.pump.designFlow} / 1000 m³/s) × ${results.pump.tdh} m) / 1000`,
+                intermediateResult: results.pump.hydraulicPower.toFixed(2),
+                unit: 'kW',
+              },
+              {
+                stepNumber: 3,
+                title: 'Motor Shaft Power Factoring Wire-to-Water Inefficiencies',
+                description: 'Divide hydraulic power by centrifugal impeller efficiency and electric induction motor stator/rotor losses.',
+                formula: 'P_motor = P_hyd / ((η_pump / 100) × (η_motor / 100))',
+                mathSubstitution: `${results.pump.hydraulicPower.toFixed(2)} kW / ((${p.pumpEfficiency} / 100) × (${p.motorEfficiency} / 100))`,
+                intermediateResult: results.pump.motorPower.toFixed(2),
+                unit: 'kW',
+              },
+            ]}
+            engineeringRuleOfThumb="Always specify Duty/Standby pumps (1 Duty + 1 Standby, each 100% capacity) for critical infrastructure so pump failure does not cut campus water supply. Furthermore, select standard commercial motor frame (e.g. 1.5 kW or 2.2 kW) to prevent motor overload during high-flow runout condition."
+          />
         </>
       )}
 
@@ -801,6 +1123,49 @@ export function StepWastewater() {
             <ResultCard label="Monthly" value={results.wastewater.wastewaterM3Month} unit="m³/mo" color="amber" />
             <ResultCard label="Annual" value={results.wastewater.wastewaterM3Year} unit="m³/yr" color="slate" />
           </div>
+
+          <StudentCalculationCard
+            title="Student Derivation: Sanitary Wastewater Discharge & Return Rate"
+            standardRef="SLS 745 / BS EN 12056 / CIBSE Guide G Table 3"
+            governingFormula="Q_ww = Q_indoor × [SewerReturn% / 100] + Q_process + Q_kitchen"
+            formulaVariables={[
+              { symbol: 'Q_indoor', meaning: 'Net Indoor Potable Water Feed', unit: 'm³/day', value: (results.wastewater.indoorDemand / 1000).toFixed(2) },
+              { symbol: 'Return%', meaning: 'Sanitary Sewer Return Factor', unit: '%', value: project.wastewater.sewerReturnFactor },
+              { symbol: 'Q_process', meaning: 'Segregated Industrial/Lab Waste', unit: 'L/day', value: project.wastewater.processWastewater },
+              { symbol: 'Q_kitchen', meaning: 'Canteen Kitchen Grease Waste', unit: 'L/day', value: project.wastewater.kitchenWastewater },
+              { symbol: 'Q_ww', meaning: 'Total Daily Sanitary Discharge', unit: 'm³/day', value: results.wastewater.wastewaterM3Day },
+            ]}
+            steps={[
+              {
+                stepNumber: 1,
+                title: 'Indoor Sanitary Feed Extraction',
+                description: 'Extract indoor domestic consumption from previous steps (ablution, showering, toilet flushing, and staff drinking).',
+                formula: 'Q_indoor = Q_domestic + Q_hostel',
+                mathSubstitution: `Indoor Demand = ${(results.wastewater.indoorDemand).toFixed(0)} L/day = ${(results.wastewater.indoorDemand / 1000).toFixed(2)} m³/day`,
+                intermediateResult: (results.wastewater.indoorDemand / 1000).toFixed(2),
+                unit: 'm³/day',
+              },
+              {
+                stepNumber: 2,
+                title: 'Sewer Return Factor (Consumptive Loss Deduction)',
+                description: 'Multiply indoor consumption by the sewer return factor (typically 80% to 90%). The remaining 10% to 20% represents metabolic consumption, food absorption, and cleaning evaporation.',
+                formula: 'Q_domestic_ww = Q_indoor × (SewerReturn% / 100)',
+                mathSubstitution: `${(results.wastewater.indoorDemand / 1000).toFixed(2)} m³/day × (${project.wastewater.sewerReturnFactor} / 100)`,
+                intermediateResult: ((results.wastewater.indoorDemand / 1000) * (project.wastewater.sewerReturnFactor / 100)).toFixed(2),
+                unit: 'm³/day',
+              },
+              {
+                stepNumber: 3,
+                title: 'Auxiliary Wastewater & STP Daily Hydraulic Inflow',
+                description: 'Sum domestic sewer flow with dedicated kitchen grease interceptor lines and workshop process effluent.',
+                formula: 'Q_total_ww = Q_domestic_ww + (Q_process + Q_kitchen + Q_hostel) / 1000',
+                mathSubstitution: `${((results.wastewater.indoorDemand / 1000) * (project.wastewater.sewerReturnFactor / 100)).toFixed(2)} + (${project.wastewater.processWastewater} + ${project.wastewater.kitchenWastewater} + ${project.wastewater.hostelWastewater}) / 1000`,
+                intermediateResult: results.wastewater.wastewaterM3Day,
+                unit: 'm³/day',
+              },
+            ]}
+            engineeringRuleOfThumb="Never add outdoor irrigation or rainwater to the sanitary sewer! Irrigation water transpires naturally into the atmosphere. Including irrigation causes extreme oversizing of Sewage Treatment Plants (STP), washing away biological biomass and causing wastewater treatment failure."
+          />
         </>
       )}
     </div>
@@ -868,6 +1233,51 @@ export function StepRainwater() {
             <ResultCard label="Daily Average" value={(results.rainwater.nonPotableOffset / 1000).toFixed(2)} unit="m³/d" color="blue" />
             <ResultCard label="Non-Potable Offset" value={results.rainwater.nonPotableOffset} unit="L/d" color="green" />
           </div>
+
+          <StudentCalculationCard
+            title="Student Derivation: Rational Rainwater Yield & First-Flush Diversion"
+            standardRef="BS 8515 / SLS 1553 / CIBSE Guide G Section 5"
+            governingFormula="V_annual = A_roof × [P_annual - FF_loss] × C_runoff × η_filter × η_collection / 1000"
+            formulaVariables={[
+              { symbol: 'A_roof', meaning: 'Horizontally Projected Roof Footprint', unit: 'm²', value: rw.roofArea },
+              { symbol: 'P_annual', meaning: 'Mean Annual Rainfall Depth', unit: 'mm/yr', value: rw.annualRainfall },
+              { symbol: 'C_r', meaning: 'Impervious Roof Runoff Factor', unit: '—', value: rw.runoffCoefficient },
+              { symbol: 'FF_loss', meaning: 'First-Flush Sanitary Diversion', unit: 'mm', value: rw.firstFlushLoss },
+              { symbol: 'η_filter', meaning: 'Self-Cleaning Vortex Filter Yield', unit: '%', value: rw.filterEfficiency },
+              { symbol: 'η_coll', meaning: 'Gutter & Tank Overflow Hydraulics', unit: '%', value: rw.collectionEfficiency },
+              { symbol: 'V_harvest', meaning: 'Net Usable Non-Potable Water', unit: 'm³/yr', value: results.rainwater.annualHarvested.toFixed(2) },
+            ]}
+            steps={[
+              {
+                stepNumber: 1,
+                title: 'Theoretical Gross Catchment Precipitation',
+                description: 'Compute theoretical volume falling on the projected horizontal roof catchment area.',
+                formula: 'V_gross = (A_roof × P_annual) / 1000',
+                mathSubstitution: `(${rw.roofArea} m² × ${rw.annualRainfall} mm) / 1000`,
+                intermediateResult: ((rw.roofArea * rw.annualRainfall) / 1000).toFixed(1),
+                unit: 'm³/yr',
+              },
+              {
+                stepNumber: 2,
+                title: 'First-Flush Sanitary Contaminant Diversion',
+                description: 'Deduct initial rainfall depth (typically 1.0–2.0 mm) to wash roof surfaces and flush away bird droppings, dust, and organic debris before storage.',
+                formula: 'P_effective = max(0, P_annual - FirstFlush_Loss)',
+                mathSubstitution: `${rw.annualRainfall} mm - ${rw.firstFlushLoss} mm`,
+                intermediateResult: (Math.max(0, rw.annualRainfall - rw.firstFlushLoss)).toFixed(1),
+                unit: 'mm',
+              },
+              {
+                stepNumber: 3,
+                title: 'Surface Impermeability & Mechanical Filter Efficiencies',
+                description: 'Apply roof material runoff factor Cr (0.85 for tile/metal) and dual mechanical efficiency factors for fine basket screens and leaf separators.',
+                formula: 'V_harvest = A_roof × P_effective × C_r × (η_filter / 100) × (η_coll / 100) / 1000',
+                mathSubstitution: `${rw.roofArea} × ${(Math.max(0, rw.annualRainfall - rw.firstFlushLoss)).toFixed(1)} × ${rw.runoffCoefficient} × (${rw.filterEfficiency}/100) × (${rw.collectionEfficiency}/100) / 1000`,
+                intermediateResult: results.rainwater.annualHarvested.toFixed(2),
+                unit: 'm³/yr',
+              },
+            ]}
+            engineeringRuleOfThumb="Rainwater harvesting yields fluctuate with seasonal monsoons! Sizing a storage tank to capture an entire year of rain is uneconomical. Civil engineers size rainwater cisterns for 14 to 21 days of dry-period non-potable demand (toilet flushing and landscape irrigation)."
+          />
 
           <Card>
             <h3 className="text-sm font-semibold mb-3">Monthly Rainfall Data (mm)</h3>
@@ -947,6 +1357,49 @@ export function StepGreywater() {
             <ResultCard label="Potable Reduction" value={results.greywater.potableWaterReduction} unit="L/d" color="blue" />
             <ResultCard label="Reduction %" value={results.greywater.potableReductionPct} unit="%" color="cyan" />
           </div>
+
+          <StudentCalculationCard
+            title="Student Derivation: Greywater Mass Balance & Potable Water Offset"
+            standardRef="BS 8525 / SLS 1553 / CIBSE Guide G Section 6"
+            governingFormula="Q_reusable = Σ (Q_source,i) × [η_treatment / 100]   |   Offset = min(Q_reusable, Q_eligible_demand)"
+            formulaVariables={[
+              { symbol: 'Q_sources', meaning: 'Segregated Light Greywater Inflow', unit: 'L/day', value: results.greywater.greywaterGenerated },
+              { symbol: 'η_treat', meaning: 'Filtration & Disinfection Efficiency', unit: '%', value: gw.treatmentEfficiency },
+              { symbol: 'Q_reusable', meaning: 'Net Treated Non-Potable Water', unit: 'L/day', value: results.greywater.reusableGreywater.toFixed(0) },
+              { symbol: 'Q_demand', meaning: 'Confirmed Eligible Toilet Demand', unit: 'L/day', value: project.greywater.wcFlushingDemand },
+              { symbol: 'Offset%', meaning: 'Potable Water Consumption Reduction', unit: '%', value: results.greywater.potableReductionPct.toFixed(1) },
+            ]}
+            steps={[
+              {
+                stepNumber: 1,
+                title: 'Light Greywater Source Summation',
+                description: 'Collect washbasin, shower, and laundry rinse wastewater while strictly isolating black toilet wastewater and kitchen sink grease.',
+                formula: 'Q_raw = Q_basin + Q_shower + Q_laundry + Q_other',
+                mathSubstitution: `${gw.washBasinFlow} L + ${gw.showerFlow} L + ${gw.laundryFlow} L + ${gw.otherSinkFlow} L`,
+                intermediateResult: `${results.greywater.greywaterGenerated}`,
+                unit: 'L/day',
+              },
+              {
+                stepNumber: 2,
+                title: 'Treatment Plant Recovery & Filtration Losses',
+                description: 'Factor in backwash filter reject, membrane scouring, and sludge purging losses (typically 10% to 15%).',
+                formula: 'Q_treated = Q_raw × (η_treatment / 100)',
+                mathSubstitution: `${results.greywater.greywaterGenerated} L/day × (${gw.treatmentEfficiency} / 100)`,
+                intermediateResult: `${results.greywater.reusableGreywater.toFixed(0)}`,
+                unit: 'L/day',
+              },
+              {
+                stepNumber: 3,
+                title: 'Demand Matching & Potable Mains Reduction',
+                description: 'Cap reuse by verified eligible fixture demand (WC cistern flushing and landscape irrigation) to prevent unused treated storage overflow.',
+                formula: 'Q_potable_saved = min(Q_treated, Q_eligible_demand)',
+                mathSubstitution: `min(${results.greywater.reusableGreywater.toFixed(0)} L/d, ${project.greywater.wcFlushingDemand} L/d) = ${results.greywater.potableWaterReduction} L/d`,
+                intermediateResult: `${results.greywater.potableWaterReduction}`,
+                unit: 'L/day',
+              },
+            ]}
+            engineeringRuleOfThumb="Untreated greywater turns septic and anaerobic within 24 hours, generating toxic hydrogen sulfide and explosive pathogen counts! Always size greywater balancing tanks for immediate continuous processing, with an automatic potable mains top-up solenoid valve."
+          />
         </>
       )}
     </div>
@@ -1016,6 +1469,57 @@ export function StepHotWater() {
             <ResultCard label="Storage Capacity Required" value={results.hotWater.requiredStorageL.toFixed(0)} unit="L" color="cyan" />
             <ResultCard label="Heating Power Required" value={results.hotWater.heatingLoadKW.toFixed(2)} unit="kW" color="red" />
           </div>
+
+          <VisualThermalSpectrum
+            coldWaterTempC={hw.coldWaterTempC}
+            deliveryTempC={hw.deliveryTempC}
+            storageTempC={hw.storageTempC}
+          />
+
+          <StudentCalculationCard
+            title="Student Thermal Derivation: Calorifier Power & Legionella Disinfection"
+            standardRef="BS 8558 / CIBSE Guide G / HSE ACoP L8 Legionella Code"
+            governingFormula="P_heat = [V_storage × ρ × c_p × (T_storage - T_cold)] / [3600 × 1000 × t_recovery]"
+            formulaVariables={[
+              { symbol: 'V_storage', meaning: 'Hot Water Cylinder Storage', unit: 'L', value: results.hotWater.requiredStorageL.toFixed(0) },
+              { symbol: 'T_cold', meaning: 'Mains Incoming Cold Temperature', unit: '°C', value: hw.coldWaterTempC },
+              { symbol: 'T_storage', meaning: 'Anti-Legionella Cylinder Temp', unit: '°C', value: hw.storageTempC },
+              { symbol: 'T_delivery', meaning: 'Point-of-Use Blended Tap Temp', unit: '°C', value: hw.deliveryTempC },
+              { symbol: 'c_p', meaning: 'Specific Heat Capacity of Water', unit: 'kJ/kg·°C', value: 4.186 },
+              { symbol: 't_rec', meaning: 'Thermostat Recovery Period', unit: 'hours', value: hw.heatingTimeHours },
+              { symbol: 'P_heat', meaning: 'Heater Recovery Rating', unit: 'kW', value: results.hotWater.heatingLoadKW.toFixed(2) },
+            ]}
+            steps={[
+              {
+                stepNumber: 1,
+                title: 'Fixture & Occupant Hot Water Draw Allocation',
+                description: 'Aggregate hot water requirements across showers (typically 40–50% heated), washbasins (30–40% heated), and commercial kitchen wash-up sinks.',
+                formula: 'Q_hw_daily = Σ (Q_fixture,i × HW_Allocation%)',
+                mathSubstitution: `Total Daily Hot Water Demand = ${results.hotWater.dailyHotWaterDemandL.toFixed(0)} L/day (${results.hotWater.dailyHotWaterDemandM3.toFixed(2)} m³/day)`,
+                intermediateResult: results.hotWater.dailyHotWaterDemandL.toFixed(0),
+                unit: 'L/day',
+              },
+              {
+                stepNumber: 2,
+                title: 'Thermal Elevation Differential (ΔT)',
+                description: 'Determine temperature delta required to lift ambient incoming mains water to anti-bacterial storage temperature (≥60°C).',
+                formula: 'ΔT = T_storage - T_cold',
+                mathSubstitution: `${hw.storageTempC} °C - ${hw.coldWaterTempC} °C`,
+                intermediateResult: `${hw.storageTempC - hw.coldWaterTempC}`,
+                unit: '°C rise',
+              },
+              {
+                stepNumber: 3,
+                title: 'Sensible Heat Energy & Electric Recovery Power Rating',
+                description: 'Calculate electrical heating energy required to regenerate the full cylinder volume within the target recovery window t_rec.',
+                formula: 'P_heat (kW) = (V × ρ × c_p × ΔT) / (3600 × 1000 × t_rec)',
+                mathSubstitution: `(${results.hotWater.requiredStorageL.toFixed(0)} L × 1.0 kg/L × 4.186 kJ/kg°C × ${hw.storageTempC - hw.coldWaterTempC} °C) / (3600 × ${hw.heatingTimeHours} h)`,
+                intermediateResult: results.hotWater.heatingLoadKW.toFixed(2),
+                unit: 'kW',
+              },
+            ]}
+            engineeringRuleOfThumb="Legionella pneumophila bacteria proliferate rapidly between 20°C and 45°C. Storing hot water at ≥60°C kills 90% of bacteria within 2 minutes! However, 60°C causes third-degree skin scalding in 5 seconds. Therefore, TMVs (Thermostatic Mixing Valves) are legally required at taps to blend water down to 38°C–43°C."
+          />
 
           <CalcDisplay
             title="Heating Load & Recovery Power Calculation"
@@ -1089,6 +1593,48 @@ export function StepFireWater() {
             <ResultCard label="Duration" value={results.fireWater.fireDuration} unit="hours" color="amber" />
             <ResultCard label="Storage Required" value={results.fireWater.fireWaterStorage} unit="m³" color="red" />
           </div>
+
+          <StudentCalculationCard
+            title="Student Fire Hydraulics Derivation: Dedicated Fire Suppression Storage"
+            standardRef="NFPA 13 / NFPA 14 / BS 9990 Fire Protection Code"
+            governingFormula="V_fire = (Q_fire × 60 × t_duration) / 1000   |   Dedicated Static Fire Reserve"
+            formulaVariables={[
+              { symbol: 'Q_fire', meaning: 'Required Fire Fighting Flow Rate', unit: 'L/min', value: results.fireWater.fireFlow },
+              { symbol: 't_dur', meaning: 'Fire Service Attack Duration', unit: 'hours', value: results.fireWater.fireDuration },
+              { symbol: 'V_fire', meaning: 'Dedicated Emergency Fire Reserve', unit: 'm³', value: results.fireWater.fireWaterStorage },
+              { symbol: 'Hazard', meaning: 'Occupancy Fire Risk Category', unit: 'class', value: fw.hazardClassification || 'Ordinary Hazard' },
+            ]}
+            steps={[
+              {
+                stepNumber: 1,
+                title: 'Fire Protection Stream Demand Allocation',
+                description: 'Determine required water stream delivery based on building height, area, and installed suppression systems (hydrants, landing valves, hose reels, automatic wet sprinklers).',
+                formula: 'Q_fire = Q_hydrants + Q_sprinklers + Q_hosereels',
+                mathSubstitution: `Rated Fire Flow = ${results.fireWater.fireFlow} L/min (${(results.fireWater.fireFlow / 60).toFixed(2)} L/s)`,
+                intermediateResult: results.fireWater.fireFlow.toFixed(0),
+                unit: 'L/min',
+              },
+              {
+                stepNumber: 2,
+                title: 'Emergency Pumping Attack Duration Requirement',
+                description: 'Apply statutory fire fighting duration based on fire brigade travel time and building evacuation clearance window (typically 45 to 120 minutes).',
+                formula: 'Minutes = t_duration × 60 min/hour',
+                mathSubstitution: `${results.fireWater.fireDuration} hours × 60 minutes = ${results.fireWater.fireDuration * 60} minutes`,
+                intermediateResult: `${results.fireWater.fireDuration * 60}`,
+                unit: 'minutes',
+              },
+              {
+                stepNumber: 3,
+                title: 'Dedicated Volumetric Reservoir Sizing',
+                description: 'Calculate dedicated static water volume that must remain physically safeguarded 24/7/365 exclusively for fire pumps.',
+                formula: 'V_fire (m³) = (Q_fire × 60 × t_duration) / 1000',
+                mathSubstitution: `(${results.fireWater.fireFlow} L/min × 60 min/h × ${results.fireWater.fireDuration} h) / 1000`,
+                intermediateResult: results.fireWater.fireWaterStorage.toFixed(2),
+                unit: 'm³',
+              },
+            ]}
+            engineeringRuleOfThumb="Dedicated fire storage must NEVER be compromised by domestic consumption! In combined storage tanks, the domestic booster suction pipe must be positioned high above the dedicated fire water level to prevent domestic drawdown into the fire reserve."
+          />
         </>
       )}
     </div>

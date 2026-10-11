@@ -11,6 +11,11 @@ import {
   HelpCircle,
   Activity,
   Droplets,
+  GraduationCap,
+  Sparkles,
+  CheckCircle2,
+  Layers,
+  Gauge,
 } from 'lucide-react';
 import type { EngineeringWarning, FactorClassification } from '@/types';
 
@@ -764,3 +769,785 @@ export function KPICard({ label, value, unit, icon, color = 'blue' }: KPICardPro
     </div>
   );
 }
+
+// ============================================================
+// STUDENT STEP-BY-STEP CALCULATION BREAKDOWN
+// ============================================================
+
+export interface CalculationStepItem {
+  stepNumber: number;
+  title: string;
+  description?: string;
+  formula?: string;
+  mathSubstitution?: string;
+  intermediateResult?: string | number;
+  unit?: string;
+  notes?: string;
+}
+
+export interface StudentCalculationCardProps {
+  title: string;
+  standardRef?: string;
+  governingFormula: string;
+  formulaVariables: { symbol: string; meaning: string; unit: string; value?: string | number }[];
+  steps: CalculationStepItem[];
+  finalResult?: { label: string; value: string | number; unit: string; status?: string };
+  engineeringRuleOfThumb?: string;
+  defaultOpen?: boolean;
+}
+
+export function StudentCalculationCard({
+  title,
+  standardRef,
+  governingFormula,
+  formulaVariables,
+  steps,
+  finalResult,
+  engineeringRuleOfThumb,
+  defaultOpen = true,
+}: StudentCalculationCardProps) {
+  const [open, setOpen] = useState(defaultOpen);
+  const [viewMode, setViewMode] = useState<'stepwise' | 'compact'>('stepwise');
+
+  return (
+    <div className="border border-indigo-200/90 rounded-xl bg-white shadow-xs overflow-hidden my-4 transition-all">
+      {/* Header */}
+      <div
+        onClick={() => setOpen(!open)}
+        className="cursor-pointer bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 select-none hover:brightness-105 transition-all"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-amber-300">
+            <GraduationCap className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] uppercase tracking-wider font-semibold text-indigo-300 flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-amber-400" /> Educational Calculation Walkthrough
+              </span>
+              {standardRef && (
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-indigo-800/80 text-indigo-200 border border-indigo-600/40">
+                  {standardRef}
+                </span>
+              )}
+            </div>
+            <h4 className="text-base font-bold text-white tracking-tight">{title}</h4>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {finalResult && (
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-white/10 backdrop-blur-xs text-xs font-semibold text-indigo-100">
+              <span>{finalResult.label}:</span>
+              <span className="text-amber-300 font-mono font-bold">
+                {finalResult.value} {finalResult.unit}
+              </span>
+            </div>
+          )}
+          <ChevronDown className={`w-5 h-5 text-indigo-300 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+        </div>
+      </div>
+
+      {/* Collapsible Content */}
+      {open && (
+        <div className="p-5 space-y-5 bg-gradient-to-b from-indigo-50/20 via-white to-white">
+          {/* Top Bar: Mode switcher & Educational Notice */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-indigo-100 pb-3">
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
+              <BookOpen className="w-4 h-4 text-indigo-600" />
+              <span>Step-by-step breakdown tailored for university/polytechnic students and reviewing engineers</span>
+            </div>
+            <div className="flex items-center rounded-lg bg-slate-100 p-0.5 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setViewMode('stepwise'); }}
+                className={`px-3 py-1 rounded-md transition-colors ${viewMode === 'stepwise' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                Detailed Steps
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setViewMode('compact'); }}
+                className={`px-3 py-1 rounded-md transition-colors ${viewMode === 'compact' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                Formula & Variables
+              </button>
+            </div>
+          </div>
+
+          {/* Governing Formula Banner */}
+          <div className="bg-slate-900 rounded-lg p-4 text-white shadow-inner space-y-2">
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span className="uppercase tracking-wider font-semibold text-indigo-400 flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5" /> Governing Engineering Formula
+              </span>
+              {standardRef && <span>Standard: {standardRef}</span>}
+            </div>
+            <div className="font-mono text-base sm:text-lg font-bold text-amber-300 tracking-wide overflow-x-auto py-1">
+              {governingFormula}
+            </div>
+          </div>
+
+          {/* Variables Legend */}
+          <div className="space-y-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Extracted Project Parameters & Variables
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+              {formulaVariables.map((v, i) => (
+                <div key={i} className="bg-white border border-slate-200 rounded-lg p-2.5 shadow-2xs flex flex-col justify-between">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-mono font-bold text-indigo-700 text-sm bg-indigo-50 px-1.5 py-0.5 rounded">
+                      {v.symbol}
+                    </span>
+                    <span className="text-[11px] text-slate-500 font-mono">[{v.unit}]</span>
+                  </div>
+                  <div className="text-xs text-slate-600 font-medium mt-1 leading-snug">{v.meaning}</div>
+                  {v.value !== undefined && (
+                    <div className="text-xs font-mono font-bold text-slate-900 mt-1.5 pt-1 border-t border-slate-100 flex items-center justify-between">
+                      <span className="text-[10px] text-slate-400 uppercase font-sans">Active</span>
+                      <span>{v.value} {v.unit}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Step-by-Step Chain */}
+          {viewMode === 'stepwise' && (
+            <div className="space-y-3 pt-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Mathematical Execution & Derivation Sequence
+              </span>
+              <div className="space-y-3 relative before:absolute before:inset-0 before:left-3.5 before:w-0.5 before:bg-indigo-200">
+                {steps.map((st) => (
+                  <div key={st.stepNumber} className="relative flex items-start gap-3.5 pl-1">
+                    <div className="w-6 h-6 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center flex-shrink-0 z-10 shadow-xs ring-4 ring-white">
+                      {st.stepNumber}
+                    </div>
+                    <div className="flex-1 bg-white border border-slate-200/90 rounded-lg p-3.5 shadow-2xs space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <h5 className="text-xs font-bold text-slate-800">{st.title}</h5>
+                        {st.intermediateResult && (
+                          <span className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                            = {st.intermediateResult} {st.unit || ''}
+                          </span>
+                        )}
+                      </div>
+                      {st.description && (
+                        <p className="text-xs text-slate-600 leading-relaxed">{st.description}</p>
+                      )}
+                      {st.formula && (
+                        <div className="font-mono text-xs text-slate-700 bg-slate-50 p-2 rounded border border-slate-200/80">
+                          <span className="text-slate-400 mr-2 font-sans text-[10px] uppercase">Form:</span>
+                          {st.formula}
+                        </div>
+                      )}
+                      {st.mathSubstitution && (
+                        <div className="font-mono text-xs text-indigo-950 bg-indigo-50/50 p-2 rounded border border-indigo-100">
+                          <span className="text-indigo-500 mr-2 font-sans text-[10px] uppercase font-bold">Subst:</span>
+                          {st.mathSubstitution}
+                        </div>
+                      )}
+                      {st.notes && (
+                        <div className="text-[11px] text-amber-800 bg-amber-50/60 rounded px-2 py-1 border border-amber-200/50 flex items-center gap-1.5 mt-1">
+                          <Lightbulb className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                          <span>{st.notes}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Rule of Thumb / Viva Insight */}
+          {engineeringRuleOfThumb && (
+            <div className="bg-amber-50/70 border border-amber-200/80 rounded-lg p-3 text-xs text-amber-900 flex items-start gap-2.5">
+              <Lightbulb className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <strong className="font-bold text-amber-950 block mb-0.5">
+                  Engineering Insight & Examination Note:
+                </strong>
+                <p className="leading-relaxed text-amber-900/90">{engineeringRuleOfThumb}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// VISUAL TANK CROSS-SECTION DIAGRAM
+// ============================================================
+
+export interface VisualTankCrossSectionProps {
+  label: string;
+  shape: 'Rectangular' | 'Cylindrical';
+  length: number;
+  width: number;
+  effectiveDepth: number;
+  freeboard: number;
+  effectiveVolume: number;
+  grossVolume: number;
+  requiredCapacity?: number;
+  status: 'green' | 'amber' | 'red';
+}
+
+export function VisualTankCrossSection({
+  label,
+  shape,
+  length,
+  width,
+  effectiveDepth,
+  freeboard,
+  effectiveVolume,
+  grossVolume,
+  requiredCapacity = 0,
+  status,
+}: VisualTankCrossSectionProps) {
+  const totalDepth = Math.max(effectiveDepth + freeboard, 0.1);
+  const waterPct = Math.min(100, Math.max(10, (effectiveDepth / totalDepth) * 100));
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+        <div>
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            Schematic Tank Section ({shape})
+          </span>
+          <h4 className="text-sm font-bold text-slate-800">{label}</h4>
+        </div>
+        <StatusIndicator status={status} />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+        {/* SVG Cross-Section Graphic */}
+        <div className="md:col-span-7 bg-slate-900 rounded-lg p-3 flex flex-col items-center justify-center text-white relative overflow-hidden">
+          <svg viewBox="0 0 340 180" className="w-full h-44 max-w-[340px]">
+            {/* Tank Shell Wall */}
+            <rect x="30" y="20" width="280" height="135" rx="4" fill="#1e293b" stroke="#64748b" strokeWidth="2.5" />
+
+            {/* Freeboard Air Space (Top) */}
+            <rect x="33" y="23" width="274" height={30} fill="#0f172a" />
+            <text x="170" y="42" fill="#94a3b8" fontSize="10" textAnchor="middle" fontFamily="sans-serif">
+              Air Gap Freeboard: {freeboard.toFixed(2)} m
+            </text>
+
+            {/* Water Reservoir Zone */}
+            <rect x="33" y="55" width="274" height="97" fill="url(#tankWaterGrad)" opacity="0.85" />
+            <path d="M 33 55 Q 100 52 170 55 T 307 55" fill="none" stroke="#38bdf8" strokeWidth="1.5" />
+
+            {/* Water label */}
+            <text x="170" y="95" fill="#ffffff" fontSize="12" fontWeight="bold" textAnchor="middle" fontFamily="sans-serif">
+              Active Storage: {effectiveVolume.toFixed(2)} m³
+            </text>
+            <text x="170" y="112" fill="#bae6fd" fontSize="9.5" textAnchor="middle" fontFamily="sans-serif">
+              Effective Depth: {effectiveDepth.toFixed(2)} m ({waterPct.toFixed(0)}% fill)
+            </text>
+
+            {/* Inflow Pipe Top Right */}
+            <rect x="260" y="8" width="12" height="25" fill="#3b82f6" />
+            <path d="M 260 33 L 272 33" stroke="#93c5fd" strokeWidth="2" />
+            <text x="266" y="6" fill="#93c5fd" fontSize="8" textAnchor="middle">Inlet (Air Gap)</text>
+
+            {/* Overflow Pipe Top Left */}
+            <rect x="18" y="45" width="15" height="8" fill="#f59e0b" />
+            <text x="12" y="40" fill="#fcd34d" fontSize="8">Overflow</text>
+
+            {/* Suction Pipe Bottom Left */}
+            <rect x="18" y="130" width="15" height="12" fill="#10b981" />
+            <text x="12" y="152" fill="#6ee7b7" fontSize="8">To Pumps</text>
+
+            {/* Bottom Sump Drain */}
+            <rect x="160" y="155" width="20" height="8" fill="#64748b" />
+
+            {/* Dimension Lines (Length & Width) */}
+            <line x1="30" y1="168" x2="310" y2="168" stroke="#94a3b8" strokeWidth="1" strokeDasharray="3 3" />
+            <text x="170" y="177" fill="#cbd5e1" fontSize="9" textAnchor="middle">
+              {shape === 'Cylindrical' ? `Diameter: ${length} m` : `Length: ${length} m × Width: ${width} m`}
+            </text>
+
+            <defs>
+              <linearGradient id="tankWaterGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#0284c7" />
+                <stop offset="100%" stopColor="#0369a1" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+
+        {/* Technical Data & Ratios */}
+        <div className="md:col-span-5 space-y-2.5 text-xs">
+          <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-1">
+            <div className="flex justify-between text-slate-500 font-medium">
+              <span>Required Compartment Capacity:</span>
+              <span className="font-bold text-slate-800">{requiredCapacity.toFixed(2)} m³</span>
+            </div>
+            <div className="flex justify-between text-slate-500 font-medium">
+              <span>Effective Water Volume (V_eff):</span>
+              <span className="font-bold text-blue-700">{effectiveVolume.toFixed(2)} m³</span>
+            </div>
+            <div className="flex justify-between text-slate-500 font-medium">
+              <span>Gross Internal Volume (V_gross):</span>
+              <span className="font-bold text-slate-800">{grossVolume.toFixed(2)} m³</span>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <div className="flex justify-between text-[11px] font-semibold text-slate-600">
+              <span>Storage Adequacy Fill Ratio</span>
+              <span>{requiredCapacity > 0 ? ((effectiveVolume / requiredCapacity) * 100).toFixed(0) : 100}%</span>
+            </div>
+            <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden border border-slate-200">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  status === 'green' ? 'bg-emerald-500' : status === 'amber' ? 'bg-amber-500' : 'bg-red-500'
+                }`}
+                style={{ width: `${Math.min(100, requiredCapacity > 0 ? (effectiveVolume / requiredCapacity) * 100 : 100)}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="text-[11px] text-slate-500 leading-relaxed bg-blue-50/50 p-2 rounded border border-blue-100">
+            <strong>Student Note:</strong> Effective capacity excludes freeboard depth ({freeboard} m) and bottom silt allowance to ensure sediment is never pulled into booster pumps.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// VISUAL HYDRAULIC GRADIENT DIAGRAM
+// ============================================================
+
+export interface VisualHydraulicGradientProps {
+  pipeLabel: string;
+  material: string;
+  diameterMm: number;
+  lengthM: number;
+  flowLps: number;
+  velocity: number;
+  inletHeadM: number;
+  frictionLossM: number;
+  fittingLossM: number;
+  elevationDifferenceM: number;
+  residualPressureM: number;
+  minRequiredResidualM?: number;
+}
+
+export function VisualHydraulicGradient({
+  pipeLabel,
+  material,
+  diameterMm,
+  lengthM,
+  flowLps,
+  velocity,
+  inletHeadM,
+  frictionLossM,
+  fittingLossM,
+  elevationDifferenceM,
+  residualPressureM,
+  minRequiredResidualM = 10,
+}: VisualHydraulicGradientProps) {
+  const totalLoss = frictionLossM + fittingLossM;
+  const isVelocityOk = velocity >= 0.8 && velocity <= 1.5;
+  const isPressureOk = residualPressureM >= minRequiredResidualM;
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+        <div>
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            Hydraulic Grade Line (HGL) Simulation
+          </span>
+          <h4 className="text-sm font-bold text-slate-800">{pipeLabel} — {material} (DN {diameterMm} mm)</h4>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+            isPressureOk ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+          }`}>
+            {isPressureOk ? 'RESIDUAL HEAD ADEQUATE' : 'PRESSURE DEFICIENT'}
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+        {/* SVG HGL Schematic */}
+        <div className="md:col-span-7 bg-slate-900 rounded-lg p-3 flex flex-col items-center justify-center text-white relative">
+          <svg viewBox="0 0 350 160" className="w-full h-40 max-w-[350px]">
+            {/* Ground Baseline */}
+            <line x1="30" y1="130" x2="320" y2="130" stroke="#475569" strokeWidth="1.5" />
+            <text x="35" y="145" fill="#64748b" fontSize="8.5">Datum: 0.0 m</text>
+
+            {/* Upstream Station (Inlet Node) */}
+            <circle cx="50" cy="130" r="4" fill="#3b82f6" />
+            <line x1="50" y1="130" x2="50" y2="40" stroke="#3b82f6" strokeWidth="2" strokeDasharray="2 2" />
+            <circle cx="50" cy="40" r="4" fill="#60a5fa" />
+            <text x="50" y="30" fill="#93c5fd" fontSize="9" fontWeight="bold" textAnchor="middle">
+              Inlet Head: {inletHeadM.toFixed(1)} m
+            </text>
+
+            {/* Hydraulic Grade Line (HGL Sloping line) */}
+            <path d="M 50 40 L 300 85" stroke="#f59e0b" strokeWidth="2.5" />
+            <text x="175" y="55" fill="#fcd34d" fontSize="9" fontWeight="bold" textAnchor="middle">
+              HGL (Friction Loss h_f: {frictionLossM.toFixed(2)} m)
+            </text>
+
+            {/* Downstream Station (Discharge Node) */}
+            <circle cx="300" cy="130" r="4" fill="#10b981" />
+            <line x1="300" y1="130" x2="300" y2="85" stroke="#10b981" strokeWidth="2" strokeDasharray="2 2" />
+            <circle cx="300" cy="85" r="4" fill="#34d399" />
+            <text x="300" y="75" fill="#6ee7b7" fontSize="9" fontWeight="bold" textAnchor="middle">
+              Residual: {residualPressureM.toFixed(1)} m
+            </text>
+
+            {/* Minimum Residual Line */}
+            <line x1="280" y1="95" x2="320" y2="95" stroke="#ef4444" strokeWidth="1" strokeDasharray="2 2" />
+            <text x="325" y="98" fill="#fca5a5" fontSize="7.5">Min 10m</text>
+
+            {/* Pipe Span & Flow */}
+            <line x1="50" y1="130" x2="300" y2="130" stroke="#38bdf8" strokeWidth="3" />
+            <text x="175" y="122" fill="#bae6fd" fontSize="8.5" textAnchor="middle">
+              Length: {lengthM} m | Flow: {flowLps.toFixed(2)} L/s →
+            </text>
+          </svg>
+        </div>
+
+        {/* Velocity Gauge & Student Metrics */}
+        <div className="md:col-span-5 space-y-2.5 text-xs">
+          <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-600 font-medium flex items-center gap-1">
+                <Gauge className="w-3.5 h-3.5 text-blue-600" /> Pipe Velocity:
+              </span>
+              <span className={`font-mono font-bold ${isVelocityOk ? 'text-emerald-700' : 'text-amber-700'}`}>
+                {velocity.toFixed(2)} m/s
+              </span>
+            </div>
+            {/* Velocity Scale bar */}
+            <div className="w-full bg-slate-200 rounded-full h-2 relative overflow-hidden">
+              <div
+                className={`h-full rounded-full ${velocity > 2.0 ? 'bg-red-500' : velocity < 0.8 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                style={{ width: `${Math.min(100, (velocity / 2.5) * 100)}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-[10px] text-slate-400">
+              <span>0 m/s</span>
+              <span className="text-emerald-600 font-bold">0.8 - 1.5 m/s (Ideal)</span>
+              <span>2.5 m/s</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-[11px]">
+            <div className="p-2 bg-slate-50 rounded border border-slate-200">
+              <span className="text-slate-400 block text-[10px] uppercase">Friction Head Loss</span>
+              <span className="font-bold font-mono text-slate-800">{frictionLossM.toFixed(2)} m</span>
+            </div>
+            <div className="p-2 bg-slate-50 rounded border border-slate-200">
+              <span className="text-slate-400 block text-[10px] uppercase">Fitting Losses</span>
+              <span className="font-bold font-mono text-slate-800">{fittingLossM.toFixed(2)} m</span>
+            </div>
+            <div className="p-2 bg-slate-50 rounded border border-slate-200">
+              <span className="text-slate-400 block text-[10px] uppercase">Static Elevation</span>
+              <span className="font-bold font-mono text-slate-800">{elevationDifferenceM.toFixed(2)} m</span>
+            </div>
+            <div className="p-2 bg-indigo-50/70 rounded border border-indigo-200">
+              <span className="text-indigo-600 block text-[10px] uppercase font-semibold">Total Head Loss</span>
+              <span className="font-bold font-mono text-indigo-900">{totalLoss.toFixed(2)} m</span>
+            </div>
+          </div>
+
+          <div className="text-[11px] text-slate-500 leading-relaxed bg-indigo-50/50 p-2 rounded border border-indigo-100">
+            <strong>Student Note:</strong> Hazen-Williams friction loss h_f is proportional to Q^1.852 and inversely proportional to D^4.87. A small increase in pipe diameter significantly cuts friction head loss!
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// VISUAL THERMAL SPECTRUM (HOT WATER & LEGIONELLA CONTROL)
+// ============================================================
+
+export interface VisualThermalSpectrumProps {
+  coldWaterTempC: number;
+  deliveryTempC: number;
+  storageTempC: number;
+}
+
+export function VisualThermalSpectrum({
+  coldWaterTempC,
+  deliveryTempC,
+  storageTempC,
+}: VisualThermalSpectrumProps) {
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+        <div>
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            Thermal Spectrum & Legionella Inactivation Control
+          </span>
+          <h4 className="text-sm font-bold text-slate-800">Temperature Safety Gradient (BS 8558 / CIBSE Guide G)</h4>
+        </div>
+        <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-800">
+          60°C Storage Standard
+        </span>
+      </div>
+
+      {/* Temperature Bar */}
+      <div className="relative pt-6 pb-2">
+        <div className="h-6 w-full rounded-full flex overflow-hidden shadow-inner border border-slate-300">
+          <div className="w-[25%] bg-blue-500 flex items-center justify-center text-[10px] font-bold text-white" title="Cold Mains Supply">
+            &lt; 20°C
+          </div>
+          <div className="w-[35%] bg-amber-500 flex items-center justify-center text-[10px] font-bold text-white relative overflow-hidden" title="Legionella Risk Zone">
+            <span className="relative z-10">20°C – 45°C (Legionella Growth Risk)</span>
+          </div>
+          <div className="w-[15%] bg-emerald-500 flex items-center justify-center text-[10px] font-bold text-white" title="Safe TMV Blended Tap">
+            38–43°C
+          </div>
+          <div className="w-[25%] bg-red-600 flex items-center justify-center text-[10px] font-bold text-white" title="Hot Storage Cylinder">
+            ≥ 60°C (Sterile)
+          </div>
+        </div>
+
+        {/* Project Markers */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-4 text-xs">
+          <div className="p-2.5 rounded-lg bg-blue-50 border border-blue-200 flex items-center gap-2">
+            <Droplets className="w-4 h-4 text-blue-600" />
+            <div>
+              <span className="text-slate-500 block text-[10px]">Ambient Cold Water</span>
+              <strong className="text-blue-900 font-bold text-sm">{coldWaterTempC} °C</strong>
+            </div>
+          </div>
+
+          <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <div>
+              <span className="text-slate-500 block text-[10px]">Point-of-Use Delivery</span>
+              <strong className="text-emerald-900 font-bold text-sm">{deliveryTempC} °C (TMV Safe)</strong>
+            </div>
+          </div>
+
+          <div className="p-2.5 rounded-lg bg-red-50 border border-red-200 flex items-center gap-2">
+            <Flame className="w-4 h-4 text-red-600" />
+            <div>
+              <span className="text-slate-500 block text-[10px]">Hot Storage Cylinder</span>
+              <strong className="text-red-900 font-bold text-sm">{storageTempC} °C (≥60°C Req)</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// VISUAL PUMP SYSTEM & DUTY CURVE
+// ============================================================
+
+export interface VisualPumpSystemCurveProps {
+  designFlowLps: number;
+  designFlowM3h: number;
+  tdhM: number;
+  staticHeadM: number;
+  frictionHeadM: number;
+  residualHeadM: number;
+  hydraulicPowerKw: number;
+  motorPowerKw: number;
+  pumpEfficiencyPct: number;
+  motorEfficiencyPct: number;
+}
+
+export function VisualPumpSystemCurve({
+  designFlowLps,
+  designFlowM3h,
+  tdhM,
+  staticHeadM,
+  frictionHeadM,
+  residualHeadM,
+  hydraulicPowerKw,
+  motorPowerKw,
+  pumpEfficiencyPct,
+  motorEfficiencyPct,
+}: VisualPumpSystemCurveProps) {
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+        <div>
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            Hydraulic Pump System Curve
+          </span>
+          <h4 className="text-sm font-bold text-slate-800">
+            Duty Point: {designFlowM3h.toFixed(1)} m³/h ({designFlowLps.toFixed(2)} L/s) @ {tdhM.toFixed(1)} m TDH
+          </h4>
+        </div>
+        <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-green-100 text-green-800">
+          Motor Duty: {motorPowerKw.toFixed(2)} kW
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+        {/* SVG Curve Graphic */}
+        <div className="md:col-span-7 bg-slate-900 rounded-lg p-3 flex flex-col items-center justify-center text-white relative">
+          <svg viewBox="0 0 350 180" className="w-full h-44 max-w-[350px]">
+            {/* Grid Axes */}
+            <line x1="40" y1="150" x2="320" y2="150" stroke="#64748b" strokeWidth="1.5" />
+            <line x1="40" y1="20" x2="40" y2="150" stroke="#64748b" strokeWidth="1.5" />
+            <text x="320" y="165" fill="#94a3b8" fontSize="8.5" textAnchor="end">Flow Q (m³/h) →</text>
+            <text x="25" y="25" fill="#94a3b8" fontSize="8.5" transform="rotate(-90 25,25)">Head H (m) →</text>
+
+            {/* Static Head Baseline */}
+            <line x1="40" y1="110" x2="320" y2="110" stroke="#94a3b8" strokeWidth="1" strokeDasharray="3 3" />
+            <text x="45" y="105" fill="#94a3b8" fontSize="8">Static Head: {staticHeadM} m</text>
+
+            {/* Parabolic System Resistance Curve: H = H_static + k*Q^2 */}
+            <path d="M 40 110 Q 180 100 300 40" stroke="#38bdf8" strokeWidth="2.5" fill="none" />
+            <text x="290" y="32" fill="#38bdf8" fontSize="9" fontWeight="bold">System Curve</text>
+
+            {/* Pump Head-Flow Curve (declining) */}
+            <path d="M 40 45 Q 160 55 300 130" stroke="#a855f7" strokeWidth="2" strokeDasharray="4 2" fill="none" />
+            <text x="70" y="42" fill="#c084fc" fontSize="8.5">Pump H-Q Curve</text>
+
+            {/* Duty Point Intersection (Q_d, TDH) */}
+            <circle cx="190" cy="80" r="5" fill="#f59e0b" />
+            <circle cx="190" cy="80" r="9" fill="none" stroke="#f59e0b" strokeWidth="1" strokeDasharray="2 2" className="animate-ping" />
+            <line x1="190" y1="80" x2="190" y2="150" stroke="#f59e0b" strokeWidth="1" strokeDasharray="2 2" />
+            <line x1="40" y1="80" x2="190" y2="80" stroke="#f59e0b" strokeWidth="1" strokeDasharray="2 2" />
+            <text x="195" y="75" fill="#fbbf24" fontSize="9.5" fontWeight="bold">
+              Duty Point ({designFlowM3h.toFixed(1)} m³/h, {tdhM.toFixed(1)} m)
+            </text>
+          </svg>
+        </div>
+
+        {/* Efficiencies & Power Conversion */}
+        <div className="md:col-span-5 space-y-2.5 text-xs">
+          <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-2">
+            <div>
+              <div className="flex justify-between font-medium text-slate-600 mb-0.5">
+                <span>Hydraulic Power (P_hyd):</span>
+                <span className="font-bold text-blue-700">{hydraulicPowerKw.toFixed(2)} kW</span>
+              </div>
+              <div className="text-[10px] text-slate-400 font-mono">P = (ρ × g × Q × TDH) / 1000</div>
+            </div>
+
+            <div className="border-t border-slate-200 pt-1.5">
+              <div className="flex justify-between font-medium text-slate-600 mb-0.5">
+                <span>Motor Shaft Power (P_motor):</span>
+                <span className="font-bold text-emerald-700">{motorPowerKw.toFixed(2)} kW</span>
+              </div>
+              <div className="flex justify-between text-[11px] text-slate-500">
+                <span>Pump Eff: {pumpEfficiencyPct}%</span>
+                <span>Motor Eff: {motorEfficiencyPct}%</span>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200 pt-1.5 text-[10.5px] text-slate-500 font-mono flex flex-col gap-0.5">
+              <div className="font-sans font-semibold text-slate-600">TDH Composition:</div>
+              <div className="flex justify-between">
+                <span>Static + Friction + Residual:</span>
+                <span className="font-bold text-slate-700">{staticHeadM}m + {frictionHeadM.toFixed(1)}m + {residualHeadM.toFixed(1)}m = {tdhM.toFixed(1)}m</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-[11px] text-slate-500 leading-relaxed bg-amber-50/50 p-2 rounded border border-amber-200/60">
+            <strong>Student Note:</strong> Always select the next standard commercial motor rating (e.g. {Math.ceil(motorPowerKw * 1.15)} kW) to avoid motor burnout during open-pipe runout conditions.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// VISUAL WATER BALANCE FLOW CARD
+// ============================================================
+
+export interface VisualWaterBalanceFlowProps {
+  sources: { name: string; value: number; pct: number }[];
+  consumption: { name: string; value: number; pct: number }[];
+  outflows: { name: string; value: number; pct: number }[];
+  totalDemand: number;
+}
+
+export function VisualWaterBalanceFlow({
+  sources,
+  consumption,
+  outflows,
+  totalDemand,
+}: VisualWaterBalanceFlowProps) {
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-4">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+        <div>
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            Site Water Balance Flow Diagram
+          </span>
+          <h4 className="text-sm font-bold text-slate-800">Conservation of Mass: &Sigma; Q_in = &Sigma; Q_out</h4>
+        </div>
+        <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded">
+          Total Base: {(totalDemand / 1000).toFixed(2)} m³/day
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+        {/* Inflows */}
+        <div className="p-3 bg-cyan-50/60 border border-cyan-200/80 rounded-lg space-y-2">
+          <div className="flex items-center justify-between font-bold text-cyan-900 border-b border-cyan-200/60 pb-1">
+            <span>Water Sources (Inflows)</span>
+            <span className="text-[11px]">L/day</span>
+          </div>
+          <div className="space-y-1.5">
+            {sources.map((s, i) => (
+              <div key={i} className="flex justify-between items-center text-slate-700">
+                <span className="truncate">{s.name}</span>
+                <span className="font-mono font-bold text-cyan-800">{s.value.toLocaleString()} <span className="text-[10px] text-slate-400">({s.pct}%)</span></span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Hub / Consumption */}
+        <div className="p-3 bg-blue-50/60 border border-blue-200/80 rounded-lg space-y-2">
+          <div className="flex items-center justify-between font-bold text-blue-900 border-b border-blue-200/60 pb-1">
+            <span>Facility End-Uses</span>
+            <span className="text-[11px]">L/day</span>
+          </div>
+          <div className="space-y-1.5">
+            {consumption.map((c, i) => (
+              <div key={i} className="flex justify-between items-center text-slate-700">
+                <span className="truncate">{c.name}</span>
+                <span className="font-mono font-bold text-blue-800">{c.value.toLocaleString()} <span className="text-[10px] text-slate-400">({c.pct}%)</span></span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Outflows / Wastewater */}
+        <div className="p-3 bg-amber-50/60 border border-amber-200/80 rounded-lg space-y-2">
+          <div className="flex items-center justify-between font-bold text-amber-900 border-b border-amber-200/60 pb-1">
+            <span>Discharges & Outflows</span>
+            <span className="text-[11px]">L/day</span>
+          </div>
+          <div className="space-y-1.5">
+            {outflows.map((o, i) => (
+              <div key={i} className="flex justify-between items-center text-slate-700">
+                <span className="truncate">{o.name}</span>
+                <span className="font-mono font-bold text-amber-800">{o.value.toLocaleString()} <span className="text-[10px] text-slate-400">({o.pct}%)</span></span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
