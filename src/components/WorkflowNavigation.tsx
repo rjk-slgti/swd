@@ -18,6 +18,7 @@ import {
   Droplets,
   Layers,
   Sparkles,
+  Activity,
 } from 'lucide-react';
 import {
   WORKFLOW_PHASES,
@@ -39,6 +40,8 @@ interface AppHeaderProps {
   onToggleStudentMode: () => void;
   onToggleSidebar: () => void;
   sidebarOpen: boolean;
+  telemetryOpen?: boolean;
+  onToggleTelemetry?: () => void;
   onSave: () => void;
   onLoad: () => void;
   onImport: () => void;
@@ -57,6 +60,8 @@ export function AppHeader({
   onToggleStudentMode,
   onToggleSidebar,
   sidebarOpen,
+  telemetryOpen = true,
+  onToggleTelemetry,
   onSave,
   onLoad,
   onExport,
@@ -131,6 +136,26 @@ export function AppHeader({
             className={`w-2 h-2 rounded-full ${studentMode ? 'bg-indigo-600 animate-pulse' : 'bg-slate-300'}`}
           />
         </button>
+
+        {/* Live Telemetry HUD Switch */}
+        {onToggleTelemetry && (
+          <button
+            type="button"
+            onClick={onToggleTelemetry}
+            title={telemetryOpen ? 'Collapse Right Live Telemetry Dashboard' : 'Expand Right Live Telemetry Dashboard'}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+              telemetryOpen
+                ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-2xs hover:bg-blue-100'
+                : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-800'
+            }`}
+          >
+            <Activity className={`w-4 h-4 ${telemetryOpen ? 'text-blue-600' : 'text-slate-400'}`} />
+            <span className="hidden sm:inline">Live HUD</span>
+            <span
+              className={`w-2 h-2 rounded-full ${telemetryOpen ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}
+            />
+          </button>
+        )}
 
         {/* Quick Action Buttons (Desktop) */}
         <div className="hidden md:flex items-center gap-1.5">

@@ -28,6 +28,8 @@ import {
   WorkflowSidebar,
   GuidedWorkflowFooter,
 } from '@/components/WorkflowNavigation';
+import { LiveTelemetryPane } from '@/components/LiveTelemetryPane';
+import { Activity } from 'lucide-react';
 
 function AppContent() {
   const {
@@ -50,10 +52,20 @@ function AppContent() {
   const [feedback, setFeedback] = useState('');
   const [activeView, setActiveView] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [telemetryOpen, setTelemetryOpen] = useState(true);
+  const [mobileTelemetryOpen, setMobileTelemetryOpen] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLoadDialog, setShowLoadDialog] = useState(false);
   const [saveName, setSaveName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleToggleTelemetry = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1280) {
+      setMobileTelemetryOpen((prev) => !prev);
+    } else {
+      setTelemetryOpen((prev) => !prev);
+    }
+  };
 
   // Export event listeners
   useEffect(() => {
@@ -166,6 +178,8 @@ function AppContent() {
         onToggleStudentMode={toggleStudentMode}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         sidebarOpen={sidebarOpen}
+        telemetryOpen={telemetryOpen}
+        onToggleTelemetry={handleToggleTelemetry}
         onSave={() => setShowSaveDialog(true)}
         onLoad={() => setShowLoadDialog(true)}
         onImport={() => fileInputRef.current?.click()}
@@ -176,7 +190,7 @@ function AppContent() {
         handleImportFile={handleImport}
       />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
         {/* Accordion Categorized 5-Phase Sidebar */}
         <aside
           className={`
@@ -184,7 +198,7 @@ function AppContent() {
             lg:translate-x-0 fixed lg:static inset-y-0 left-0 z-30
             w-72 bg-white border-r border-slate-200 overflow-hidden
             transition-transform duration-200 print:hidden
-            pt-14 lg:pt-0 shadow-lg lg:shadow-none flex flex-col
+            pt-14 lg:pt-0 shadow-lg lg:shadow-none flex flex-col flex-shrink-0
           `}
         >
           <WorkflowSidebar
@@ -209,7 +223,7 @@ function AppContent() {
 
         {/* Main Calculation Canvas */}
         <main className="flex-1 min-w-0 overflow-y-auto bg-slate-50/70 print:bg-white">
-          <div className="max-w-6xl mx-auto p-4 md:p-6 lg:p-8 print:p-0 print:max-w-none">
+          <div className="max-w-5xl mx-auto p-4 md:p-6 lg:p-8 print:p-0 print:max-w-none">
             {storageError && (
               <div role="alert" className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3.5 text-sm text-red-800 shadow-2xs">
                 {storageError}
@@ -248,6 +262,52 @@ function AppContent() {
             />
           </div>
         </main>
+
+        {/* Right: Persistent Live Telemetry & Executive Dashboard HUD */}
+        {telemetryOpen && (
+          <aside className="hidden xl:flex flex-col w-96 flex-shrink-0 border-l border-slate-800 bg-slate-900 overflow-hidden shadow-2xl z-20 print:hidden transition-all duration-200">
+            <LiveTelemetryPane
+              activeStepId={activeView}
+              onSelectStep={(stepId) => setActiveView(stepId)}
+              onClose={() => setTelemetryOpen(false)}
+            />
+          </aside>
+        )}
+
+        {/* Collapsed Docked Tab (Desktop) */}
+        {!telemetryOpen && (
+          <button
+            onClick={() => setTelemetryOpen(true)}
+            className="hidden xl:flex fixed right-0 top-1/2 -translate-y-1/2 z-20 bg-slate-900 border-l-2 border-t border-b border-blue-500 text-blue-400 py-3.5 px-2 rounded-l-xl shadow-2xl flex-col items-center gap-2 hover:bg-slate-800 hover:text-white transition-all group"
+            title="Open Live Telemetry HUD"
+          >
+            <Activity className="w-4 h-4 animate-pulse text-emerald-400" />
+            <span className="[writing-mode:vertical-lr] rotate-180 text-[10px] font-bold tracking-widest uppercase text-slate-300 group-hover:text-white">
+              Live HUD
+            </span>
+          </button>
+        )}
+
+        {/* Mobile / Tablet Drawer for Telemetry */}
+        {mobileTelemetryOpen && (
+          <div className="xl:hidden fixed inset-0 z-50 flex justify-end">
+            <div
+              className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
+              onClick={() => setMobileTelemetryOpen(false)}
+            />
+            <div className="relative w-full max-w-sm sm:max-w-md bg-slate-900 h-full shadow-2xl z-10 overflow-hidden">
+              <LiveTelemetryPane
+                activeStepId={activeView}
+                onSelectStep={(stepId) => {
+                  setActiveView(stepId);
+                  setMobileTelemetryOpen(false);
+                }}
+                onClose={() => setMobileTelemetryOpen(false)}
+                isMobileDrawer={true}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Engineering Footer */}
