@@ -42,6 +42,7 @@ interface AppHeaderProps {
   sidebarOpen: boolean;
   telemetryOpen?: boolean;
   onToggleTelemetry?: () => void;
+  onOpenAutoPilot?: () => void;
   onSave: () => void;
   onLoad: () => void;
   onImport: () => void;
@@ -62,6 +63,7 @@ export function AppHeader({
   sidebarOpen,
   telemetryOpen = true,
   onToggleTelemetry,
+  onOpenAutoPilot,
   onSave,
   onLoad,
   onExport,
@@ -157,6 +159,19 @@ export function AppHeader({
           </button>
         )}
 
+        {/* Smart Auto-Pilot Wizard Trigger */}
+        {onOpenAutoPilot && (
+          <button
+            type="button"
+            onClick={onOpenAutoPilot}
+            title="Non-technical Quick Project Auto-Calculate Wizard"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 shadow-xs hover:shadow transition-all"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+            <span>Auto-Pilot</span>
+          </button>
+        )}
+
         {/* Quick Action Buttons (Desktop) */}
         <div className="hidden md:flex items-center gap-1.5">
           <button
@@ -211,6 +226,14 @@ export function AppHeader({
               className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-50 text-xs"
               onClick={() => setActionsOpen(false)}
             >
+              {onOpenAutoPilot && (
+                <button
+                  onClick={onOpenAutoPilot}
+                  className="w-full text-left px-3 py-2 bg-blue-50/80 text-blue-800 font-bold hover:bg-blue-100 flex items-center gap-2 border-b border-slate-100"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Smart Auto-Pilot
+                </button>
+              )}
               <button onClick={onSave} className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2">
                 <Save className="w-3.5 h-3.5 text-emerald-600" /> Save Project
               </button>

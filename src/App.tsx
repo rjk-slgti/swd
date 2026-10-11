@@ -29,6 +29,7 @@ import {
   GuidedWorkflowFooter,
 } from '@/components/WorkflowNavigation';
 import { LiveTelemetryPane } from '@/components/LiveTelemetryPane';
+import { SmartAutoPilotModal } from '@/components/SmartAutoPilotModal';
 import { Activity } from 'lucide-react';
 
 function AppContent() {
@@ -54,6 +55,7 @@ function AppContent() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [telemetryOpen, setTelemetryOpen] = useState(true);
   const [mobileTelemetryOpen, setMobileTelemetryOpen] = useState(false);
+  const [showAutoPilotModal, setShowAutoPilotModal] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLoadDialog, setShowLoadDialog] = useState(false);
   const [saveName, setSaveName] = useState('');
@@ -67,7 +69,7 @@ function AppContent() {
     }
   };
 
-  // Export event listeners
+  // Export & modal event listeners
   useEffect(() => {
     const runExport = async (format: 'PDF' | 'Excel' | 'Word') => {
       setFeedback(`Preparing ${format} export…`);
@@ -83,17 +85,20 @@ function AppContent() {
     const handleXLSX = () => { void runExport('Excel'); };
     const handleDOCX = () => { void runExport('Word'); };
     const handlePrint = () => window.print();
+    const handleOpenAutoPilot = () => setShowAutoPilotModal(true);
 
     window.addEventListener('export-pdf', handlePDF);
     window.addEventListener('export-xlsx', handleXLSX);
     window.addEventListener('export-docx', handleDOCX);
     window.addEventListener('print-report', handlePrint);
+    window.addEventListener('open-autopilot', handleOpenAutoPilot);
 
     return () => {
       window.removeEventListener('export-pdf', handlePDF);
       window.removeEventListener('export-xlsx', handleXLSX);
       window.removeEventListener('export-docx', handleDOCX);
       window.removeEventListener('print-report', handlePrint);
+      window.removeEventListener('open-autopilot', handleOpenAutoPilot);
     };
   }, [project, results]);
 
@@ -180,6 +185,7 @@ function AppContent() {
         sidebarOpen={sidebarOpen}
         telemetryOpen={telemetryOpen}
         onToggleTelemetry={handleToggleTelemetry}
+        onOpenAutoPilot={() => setShowAutoPilotModal(true)}
         onSave={() => setShowSaveDialog(true)}
         onLoad={() => setShowLoadDialog(true)}
         onImport={() => fileInputRef.current?.click()}
@@ -423,6 +429,13 @@ function AppContent() {
           </div>
         </div>
       )}
+
+      {/* SMART AUTO-PILOT ORDINARY WIZARD MODAL */}
+      <SmartAutoPilotModal
+        isOpen={showAutoPilotModal}
+        onClose={() => setShowAutoPilotModal(false)}
+        onSuccess={(msg) => setFeedback(msg)}
+      />
     </div>
   );
 }

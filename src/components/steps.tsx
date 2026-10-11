@@ -29,7 +29,7 @@ import {
   Users, Droplets, FlaskConical, Warehouse, Fuel,
   Trash2, CloudRain, Recycle, Flame, Leaf,
   Calculator, ClipboardCheck, FileText, Settings, LayoutDashboard,
-  Activity, Gauge, RotateCcw,
+  Activity, Gauge, RotateCcw, Sparkles,
 } from 'lucide-react';
 import type { OccupancyGroup, WorkshopProcess, Fixture, TankDimension, WPSFFactor, SubMeterZone } from '@/types';
 
@@ -48,6 +48,37 @@ export function StepProjectDetails() {
   return (
     <div className="space-y-6">
       <SectionHeader step={1} title="Project Details" subtitle="Enter project information before calculations begin" icon={<Settings className="w-6 h-6 text-blue-600" />} />
+
+      {/* Non-Technical Smart Auto-Pilot Callout */}
+      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white rounded-xl p-4 sm:p-5 shadow-xs border border-indigo-700/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-400/20 border border-amber-400/30 flex items-center justify-center text-amber-300 flex-shrink-0 mt-0.5">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                Non-Technical Fast Track
+              </span>
+              <span className="text-xs text-indigo-200 font-medium">Zero-Irritation Mode</span>
+            </div>
+            <h4 className="text-sm sm:text-base font-bold text-white mt-1">
+              Want the system to Auto-Calculate everything from basic building details?
+            </h4>
+            <p className="text-xs text-slate-300 mt-1 max-w-xl leading-relaxed">
+              Don&apos;t want to fill out dozens of technical fields? Tell us your building type, occupant count, and number of floors. Our Building Services Engine will instantly configure all 19 calculation pages for you.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent('open-autopilot'))}
+          className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 shadow-md hover:shadow-lg transition-all"
+        >
+          <Sparkles className="w-4 h-4 text-slate-950" />
+          <span>Launch Smart Auto-Pilot</span>
+        </button>
+      </div>
 
       <EduCard title="Why does this matter?" icon="why">
         Project information establishes the design basis, identifies the responsible parties, and appears on every exported report.
@@ -2059,6 +2090,32 @@ export function Dashboard() {
       {/* COMPLIANCE & ENGINEERING NOTICE BANNERS */}
       <EngineeringNoticeBanner />
       <PrinciplesBanner />
+
+      {/* SMART AUTO-PILOT QUICK BAR */}
+      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white rounded-xl p-4 shadow-xs border border-indigo-700/40 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-amber-400/20 border border-amber-400/30 flex items-center justify-center text-amber-300">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-xs font-bold text-white flex items-center gap-1.5">
+              <span>Ordinary Input Auto-Pilot</span>
+              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-400 text-slate-950">AI WIZARD</span>
+            </div>
+            <p className="text-[11px] text-slate-300 mt-0.5">
+              Instantly recalibrate all 19 calculation pages from basic building type, size, and floors.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent('open-autopilot'))}
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 shadow transition-all"
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>Launch Auto-Pilot</span>
+        </button>
+      </div>
 
       {/* KPI CARDS */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
