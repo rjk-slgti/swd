@@ -401,8 +401,8 @@ export function calculateStorage(
   const groundTank = safeMul(requiredCapacity, data.storage.groundTankPct / 100);
   const elevatedTank = safeMul(requiredCapacity, data.storage.elevatedTankPct / 100);
 
-  const totalAllocated = undergroundTank + roofTank + groundTank + elevatedTank;
-  const check = Math.abs(totalAllocated - requiredCapacity) < 0.01;
+  const totalPct = data.storage.undergroundTankPct + data.storage.roofTankPct + data.storage.groundTankPct + data.storage.elevatedTankPct;
+  const check = Math.abs(totalPct - 100) < 0.01;
   const statusText = check ? 'ADEQUATE FOR SELECTED DESIGN BASIS' : 'ALLOCATION MISMATCH';
 
   return {
@@ -427,6 +427,11 @@ export function calculateTankVolume(
   data: ProjectData,
   storage: StorageResult | null
 ): TankDimensionResult[] {
+  const tanksByType: Record<string, number> = {};
+  data.tankDimensions.forEach((t) => {
+    tanksByType[t.tankType] = (tanksByType[t.tankType] || 0) + 1;
+  });
+
   return data.tankDimensions.map((tank) => {
     let grossVolume: number;
     let effectiveVolume: number;
@@ -440,13 +445,16 @@ export function calculateTankVolume(
       effectiveVolume = safeMul(safeMul(tank.length, tank.width), tank.effectiveDepth);
     }
 
-    let requiredCapacity = tank.requiredCapacity;
+    let categoryRequired = tank.requiredCapacity;
     if (storage) {
-      if (tank.tankType === 'Underground') requiredCapacity = storage.undergroundTank;
-      else if (tank.tankType === 'Roof') requiredCapacity = storage.roofTank;
-      else if (tank.tankType === 'Ground Level') requiredCapacity = storage.groundTank;
-      else if (tank.tankType === 'Elevated') requiredCapacity = storage.elevatedTank;
+      if (tank.tankType === 'Underground') categoryRequired = storage.undergroundTank;
+      else if (tank.tankType === 'Roof') categoryRequired = storage.roofTank;
+      else if (tank.tankType === 'Ground Level') categoryRequired = storage.groundTank;
+      else if (tank.tankType === 'Elevated') categoryRequired = storage.elevatedTank;
     }
+
+    const count = tanksByType[tank.tankType] || 1;
+    const requiredCapacity = tank.requiredCapacity > 0 ? tank.requiredCapacity : safeDiv(categoryRequired, count);
 
     const surplusDeficiency = effectiveVolume - requiredCapacity;
     let status: 'green' | 'amber' | 'red';
@@ -465,9 +473,9 @@ export function calculateTankVolume(
 
     return {
       tank: { ...tank, requiredCapacity: roundTo(requiredCapacity, 2) },
-      grossVolume,
-      effectiveVolume,
-      surplusDeficiency,
+      grossVolume: roundTo(grossVolume, 2),
+      effectiveVolume: roundTo(effectiveVolume, 2),
+      surplusDeficiency: roundTo(surplusDeficiency, 2),
       status,
       statusText,
     };
@@ -488,7 +496,7 @@ export function calculatePumpHead(
   const designFlow = config.requiredFlow > 0 ? config.requiredFlow : (peakFlow?.probablePeakFlow || 0);
   if (designFlow <= 0 || config.pumpEfficiency <= 0 || config.motorEfficiency <= 0) return null;
 
-  const designFlowM3h = designFlow * 3.6;
+  const designFlowM3h = roundTo(designFlow * 3.6, 2);
 
   const tdh =
     config.staticHead +
@@ -497,17 +505,20 @@ export function calculatePumpHead(
     config.equipmentLosses +
     config.requiredResidualPressure;
 
-  const tdhWithMargin = safeMul(tdh, 1 + config.safetyMargin / 100);
+  const tdhWithMargin = roundTo(safeMul(tdh, 1 + config.safetyMargin / 100), 2);
 
   // Hydraulic Power (kW) = Q(m³/h) × H(m) × 9.81 / 3600
-  const hydraulicPower = safeDiv(safeMul(designFlowM3h, tdhWithMargin) * 9.81, 3600);
-  const motorPower = safeDiv(
-    hydraulicPower,
-    (config.pumpEfficiency / 100) * (config.motorEfficiency / 100)
+  const hydraulicPower = roundTo(safeDiv(safeMul(designFlowM3h, tdhWithMargin) * 9.81, 3600), 2);
+  const motorPower = roundTo(
+    safeDiv(
+      hydraulicPower,
+      (config.pumpEfficiency / 100) * (config.motorEfficiency / 100)
+    ),
+    2
   );
 
   return {
-    designFlow,
+    designFlow: roundTo(designFlow, 2),
     designFlowM3h,
     tdh: tdhWithMargin,
     hydraulicPower,
@@ -596,14 +607,16 @@ export function calculateHotWater(
 
   // Calculate domestic hot water based on end-uses or population
   const cfg = data.hotWater;
-  const hostelCount = data.occupancy.find((g) => g.id === 'OCC-05')?.count ?? 0;
-  const dayCount = totalPop - hostelCount;
+  const residentialCount = data.occupancy
+    .filter((g) => g.category === 'Residential Users')
+    .reduce((sum, g) => sum + (g.count || 0), 0);
+  const dayCount = Math.max(0, totalPop - residentialCount);
 
-  // Day users: 15% of 35 L/d for handwash/pantry
+  // Day users: washbasin hot water (5L allowance * washbasinHotWaterPct)
   const dayHotL = safeMul(dayCount, 5 * (cfg.washbasinHotWaterPct / 100));
-  // Hostel residents: 40L shower * showerHotWaterPct + 10L laundry/kitchen
-  const hostelHotL = safeMul(hostelCount, 40 * (cfg.showerHotWaterPct / 100) + 15 * (cfg.hostelHotWaterPct / 100));
-  // Canteen hot water: 50% of food prep and cleaning
+  // Residential users: 40L shower * showerHotWaterPct + 15L general/laundry * hostelHotWaterPct
+  const hostelHotL = safeMul(residentialCount, 40 * (cfg.showerHotWaterPct / 100) + 15 * (cfg.hostelHotWaterPct / 100));
+  // Canteen hot water: kitchenHotWaterPct of food prep and cleaning
   const canteenHotL = data.canteen.enabled ? safeMul(data.canteen.foodPrepL + data.canteen.cleaningL, cfg.kitchenHotWaterPct / 100) : 0;
 
   const dailyHotWaterDemandL = dayHotL + hostelHotL + canteenHotL;
@@ -621,11 +634,11 @@ export function calculateHotWater(
   const heatingLoadKW = safeDiv(energyKJ, 3600 * recoveryHours);
 
   return {
-    dailyHotWaterDemandL,
-    dailyHotWaterDemandM3,
-    requiredStorageL,
-    requiredStorageM3,
-    heatingLoadKW,
+    dailyHotWaterDemandL: roundTo(dailyHotWaterDemandL, 1),
+    dailyHotWaterDemandM3: roundTo(dailyHotWaterDemandM3, 3),
+    requiredStorageL: roundTo(requiredStorageL, 1),
+    requiredStorageM3: roundTo(requiredStorageM3, 3),
+    heatingLoadKW: roundTo(heatingLoadKW, 2),
     formula: 'Heating Load (kW) = [Storage Volume (L) × 4.186 kJ/kg·K × (T_storage - T_cold)] / (3600 × t_recovery)',
     substitution: `[${roundTo(requiredStorageL, 1)} L × 4.186 × (${cfg.storageTempC}°C - ${cfg.coldWaterTempC}°C)] / (3600 × ${recoveryHours} h) = ${roundTo(heatingLoadKW, 2)} kW`,
   };
@@ -1100,7 +1113,7 @@ export function calculateSystemValidation(
   addCheck('VAL-17', 'Standards Traceability', stdOk, stdOk ? `${data.standards?.length} standards registered with clause audit status` : 'Standards register incomplete', 'BS EN 806 / CIBSE / NWSDB documented');
 
   // 18. Exports & Data Persistence
-  addCheck('VAL-18', 'Exports & Persistence', true, 'PDF, XLSX (25 sheets), DOCX, and JSON import/export active', 'Full document control and auditability');
+  addCheck('VAL-18', 'Exports & Persistence', true, 'PDF, XLSX (23 sheets), DOCX, and JSON import/export active', 'Full document control and auditability');
 
   const passCount = items.filter((i) => i.status === 'PASS').length;
   const reviewCount = items.filter((i) => i.status === 'REVIEW').length;

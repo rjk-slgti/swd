@@ -5,6 +5,7 @@ import {
   ClipboardCheck, FileText, Calculator, BookOpen, Download,
   Upload, Save, FolderOpen, RefreshCw, Menu, X,
   ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2,
+  Activity,
 } from 'lucide-react';
 import { ProjectProvider, useProject } from '@/context/ProjectContext';
 import { StepPipeDesign } from '@/components/PipeDesign';
@@ -13,7 +14,7 @@ import {
   StepWaterBalance, StepPeakDemand, StepStorage, StepPumpDesign,
   StepWastewater, StepRainwater, StepGreywater, StepFireWater,
   StepSustainability, StepDesignReview, StepReport, Dashboard,
-  StepStandards,
+  StepStandards, StepHotWater, StepSubMetering,
 } from '@/components/steps';
 import { ProgressRing } from '@/components/ui';
 
@@ -39,7 +40,9 @@ const navItems: NavItem[] = [
   { id: 'step9', label: 'Wastewater', icon: Trash2, step: 9 },
   { id: 'step10', label: 'Rainwater Harvesting', icon: CloudRain, step: 10 },
   { id: 'step11', label: 'Greywater Reuse', icon: Recycle, step: 11 },
+  { id: 'hotwater', label: 'Hot Water System', icon: Flame },
   { id: 'step12', label: 'Fire Water', icon: Flame, step: 12 },
+  { id: 'submetering', label: 'Sub-Metering & IoT', icon: Activity },
   { id: 'step13', label: 'Sustainability', icon: Leaf, step: 13 },
   { id: 'step14', label: 'Design Review', icon: ClipboardCheck, step: 14 },
   { id: 'step15', label: 'Report & Export', icon: FileText, step: 15 },
@@ -120,7 +123,9 @@ function AppContent() {
       case 'step9': return <StepWastewater />;
       case 'step10': return <StepRainwater />;
       case 'step11': return <StepGreywater />;
+      case 'hotwater': return <StepHotWater />;
       case 'step12': return <StepFireWater />;
+      case 'submetering': return <StepSubMetering />;
       case 'step13': return <StepSustainability />;
       case 'step14': return <StepDesignReview />;
       case 'step15': return <StepReport />;
@@ -129,7 +134,7 @@ function AppContent() {
   };
 
   const navigateStep = (direction: 'prev' | 'next') => {
-    const stepOrder = ['dashboard', 'standards', 'step1', 'step2', 'step3', 'step4', 'step5', 'step6', 'step7', 'step8', 'pipes', 'step9', 'step10', 'step11', 'step12', 'step13', 'step14', 'step15'];
+    const stepOrder = ['dashboard', 'standards', 'step1', 'step2', 'step3', 'step4', 'step5', 'step6', 'step7', 'step8', 'pipes', 'step9', 'step10', 'step11', 'hotwater', 'step12', 'submetering', 'step13', 'step14', 'step15'];
     const idx = stepOrder.indexOf(activeView);
     if (direction === 'prev' && idx > 0) setActiveView(stepOrder[idx - 1]);
     if (direction === 'next' && idx < stepOrder.length - 1) setActiveView(stepOrder[idx + 1]);
@@ -153,8 +158,10 @@ function AppContent() {
           <div className="flex items-center gap-2">
             <Droplets className="w-6 h-6 text-blue-600" />
             <div>
-              <h1 className="text-sm font-bold text-slate-800 hidden sm:block">Smart Water Services Design System</h1>
-              <h1 className="text-sm font-bold text-slate-800 sm:hidden">Water Services</h1>
+              <h1 className="text-sm font-bold text-slate-800">
+                <span className="hidden sm:inline">Smart Water Services Design System</span>
+                <span className="sm:hidden">Water Services</span>
+              </h1>
             </div>
           </div>
         </div>
@@ -266,14 +273,14 @@ function AppContent() {
               <button
                 disabled={activeView === 'dashboard'}
                 onClick={() => navigateStep('prev')}
-                className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-slate-600 border border-slate-300 rounded-md hover:bg-white transition-colors"
+                className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-slate-600 border border-slate-300 rounded-md hover:bg-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <ChevronLeft className="w-4 h-4" /> Previous
               </button>
               <button
                 disabled={activeView === 'step15'}
                 onClick={() => navigateStep('next')}
-                className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Next <ChevronRight className="w-4 h-4" />
               </button>

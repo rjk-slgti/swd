@@ -299,6 +299,15 @@ export function exportPDF(project: ProjectData, results: AllResults, download = 
     addParagraph(`Potable Reduction: ${results.greywater.potableReductionPct}%`);
   }
 
+  // --- 17.1 HOT WATER ---
+  addHeading('17.1 Hot Water System Design', 2);
+  if (results.hotWater) {
+    addParagraph(`Daily Hot Water Demand: ${results.hotWater.dailyHotWaterDemandL.toFixed(0)} L/day (${results.hotWater.dailyHotWaterDemandM3.toFixed(2)} m³/day)`);
+    addParagraph(`Storage Capacity Required: ${results.hotWater.requiredStorageL.toFixed(0)} L (${results.hotWater.requiredStorageM3.toFixed(2)} m³)`);
+    addParagraph(`Heating Power Required: ${results.hotWater.heatingLoadKW.toFixed(2)} kW (Recovery Time: ${project.hotWater.heatingTimeHours} hrs)`);
+    addParagraph(`Thermal Control: Stored at ${project.hotWater.storageTempC}°C for Legionella control; blended to ${project.hotWater.deliveryTempC}°C via TMVs at point-of-use.`);
+  }
+
   // --- 18. FIRE WATER ---
   addHeading('18. Fire Water', 1);
   if (results.fireWater) {
@@ -309,6 +318,16 @@ export function exportPDF(project: ProjectData, results: AllResults, download = 
       addParagraph(`Duration: ${results.fireWater.fireDuration} hours`);
       addParagraph(`Fire Water Storage: ${results.fireWater.fireWaterStorage} m³`);
     }
+  }
+
+  // --- 18.1 SUB-METERING ---
+  addHeading('18.1 Sub-Metering & Telemetry Audit', 2);
+  if (results.subMetering) {
+    addParagraph(`Total Metered Flow: ${(results.subMetering.totalMeteredDemandL / 1000).toFixed(2)} m³/day | Unaccounted Loss: ${results.subMetering.unaccountedDifferenceL.toFixed(0)} L/day (${results.subMetering.unaccountedPct}%)`);
+    addTable(
+      ['Zone Code', 'Zone Name', 'Actual Flow (L/d)', 'Share (%)', 'Status'],
+      results.subMetering.zones.map(z => [z.id, z.name, z.consumptionL, `${z.pct}%`, z.anomalyStatus])
+    );
   }
 
   // --- 19. SUSTAINABILITY ---
@@ -598,6 +617,46 @@ export function exportExcel(project: ProjectData, results: AllResults, download 
     ...results.checklist.map(c => [c.text, c.status]),
   ]);
 
+  // 22. Hot Water
+  if (results.hotWater) {
+    makeSheet('Hot Water', [
+      ['Parameter', 'Value', 'Unit'],
+      ['Daily Hot Water Demand (L/day)', results.hotWater.dailyHotWaterDemandL, 'L/day'],
+      ['Daily Hot Water Demand (m³/day)', results.hotWater.dailyHotWaterDemandM3, 'm³/day'],
+      ['Required Storage (L)', results.hotWater.requiredStorageL, 'L'],
+      ['Required Storage (m³)', results.hotWater.requiredStorageM3, 'm³'],
+      ['Heating Power Required (kW)', results.hotWater.heatingLoadKW, 'kW'],
+      ['Cold Water Supply Temp (°C)', project.hotWater.coldWaterTempC, '°C'],
+      ['Hot Storage Temp (°C)', project.hotWater.storageTempC, '°C'],
+      ['Delivery Temp (°C)', project.hotWater.deliveryTempC, '°C'],
+      ['Recovery Time (hours)', project.hotWater.heatingTimeHours, 'hours'],
+      ['Formula', results.hotWater.formula, '—'],
+      ['Substitution', results.hotWater.substitution, '—'],
+    ]);
+  } else {
+    makeSheet('Hot Water', [['Status', 'Module disabled or awaiting configuration']]);
+  }
+
+  // 23. Sub-Metering
+  if (results.subMetering) {
+    makeSheet('Sub-Metering', [
+      ['Zone ID', 'Zone Name', 'Baseline (L/d)', 'Actual/Simulated (L/d)', 'Share (%)', 'Anomaly Status', 'Diagnostic Note'],
+      ...results.subMetering.zones.map(z => [
+        z.id,
+        z.name,
+        project.subMetering.zones.find(pz => pz.id === z.id)?.baselineDemandL ?? 0,
+        z.consumptionL,
+        `${z.pct}%`,
+        z.anomalyStatus,
+        z.notes,
+      ]),
+      ['TOTAL METERED DEMAND', '', '', results.subMetering.totalMeteredDemandL, '100%', '', ''],
+      ['UNACCOUNTED DIFFERENCE', '', '', results.subMetering.unaccountedDifferenceL, `${results.subMetering.unaccountedPct}%`, '', ''],
+    ]);
+  } else {
+    makeSheet('Sub-Metering', [['Status', 'Module disabled or awaiting configuration']]);
+  }
+
   if (!wb.Sheets['Pumps']) makeSheet('Pumps', [['Status', 'Required action'], ['Additional design information required', 'Provide positive flow and efficiencies; verify manufacturer curve.']]);
   if (!wb.Sheets['Peak Flow']) makeSheet('Peak Flow', [['Status', 'Required action'], ['Additional design information required', 'Enter a documented external peak-flow calculation and confirm its design basis.']]);
   const occupancySheet = wb.Sheets['Occupancy'];
@@ -779,12 +838,30 @@ export async function exportWord(project: ProjectData, results: AllResults, down
     sections.push(para(`Potable Reduction: ${results.greywater.potableReductionPct}%`));
   }
 
+  // Hot Water
+  sections.push(heading('16.1 Hot Water System Design', HeadingLevel.HEADING_2));
+  if (results.hotWater) {
+    sections.push(para(`Daily Demand: ${results.hotWater.dailyHotWaterDemandL.toFixed(0)} L/day (${results.hotWater.dailyHotWaterDemandM3.toFixed(2)} m³/day)`));
+    sections.push(para(`Required Storage: ${results.hotWater.requiredStorageL.toFixed(0)} L | Heating Power: ${results.hotWater.heatingLoadKW.toFixed(2)} kW`));
+    sections.push(para(`Storage Temp: ${project.hotWater.storageTempC}°C (Legionella control) | Delivery: ${project.hotWater.deliveryTempC}°C (anti-scald TMVs)`));
+  }
+
   // Fire Water
   sections.push(heading('17. Fire Water', HeadingLevel.HEADING_1));
   if (results.fireWater) {
     sections.push(para(project.fireWater.enabled
       ? `Fire Water Storage: ${results.fireWater.fireWaterStorage} m³`
       : 'Fire water module not enabled. Verify with local fire authority.'));
+  }
+
+  // Sub-Metering
+  sections.push(heading('17.1 Sub-Metering & Telemetry Audit', HeadingLevel.HEADING_2));
+  if (results.subMetering) {
+    sections.push(para(`Total Metered Flow: ${(results.subMetering.totalMeteredDemandL / 1000).toFixed(2)} m³/day | Unaccounted Loss: ${results.subMetering.unaccountedDifferenceL.toFixed(0)} L/day (${results.subMetering.unaccountedPct}%)`));
+    sections.push(makeTable(
+      ['Zone Code', 'Zone Name', 'Actual Flow (L/d)', 'Share (%)', 'Status'],
+      results.subMetering.zones.map(z => [z.id, z.name, z.consumptionL, `${z.pct}%`, z.anomalyStatus])
+    ));
   }
 
   // Sustainability

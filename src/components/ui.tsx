@@ -1,5 +1,5 @@
 import { useProject } from '@/context/ProjectContext';
-import { useState, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import {
   ChevronDown,
   Info,
@@ -8,7 +8,6 @@ import {
   Lightbulb,
   ShieldAlert,
   Flame,
-  CheckCircle2,
   HelpCircle,
   Activity,
   Droplets,
@@ -169,6 +168,41 @@ export function NumberInput({
   status,
   isPrototypeDefault,
 }: NumberInputProps) {
+  const [text, setText] = useState<string>(String(value ?? 0));
+
+  useEffect(() => {
+    setText(String(value ?? 0));
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    setText(raw);
+    if (raw === '' || raw === '-') {
+      return;
+    }
+    const v = parseFloat(raw);
+    if (Number.isFinite(v)) {
+      const clamped = Math.max(min, Math.min(max ?? (unit === '%' ? 100 : 1e9), v));
+      onChange(clamped);
+    }
+  };
+
+  const handleBlur = () => {
+    if (text === '' || text === '-') {
+      setText(String(min));
+      onChange(min);
+    } else {
+      const v = parseFloat(text);
+      if (Number.isFinite(v)) {
+        const clamped = Math.max(min, Math.min(max ?? (unit === '%' ? 100 : 1e9), v));
+        setText(String(clamped));
+        onChange(clamped);
+      } else {
+        setText(String(value ?? 0));
+      }
+    }
+  };
+
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
@@ -181,11 +215,9 @@ export function NumberInput({
         <input
           aria-label={label}
           type="number"
-          value={value}
-          onChange={(e) => {
-            const v = parseFloat(e.target.value);
-            onChange(Number.isFinite(v) ? Math.max(min, Math.min(max ?? (unit === '%' ? 100 : 1e9), v)) : 0);
-          }}
+          value={text}
+          onChange={handleChange}
+          onBlur={handleBlur}
           min={min}
           max={max}
           step={step}
@@ -449,7 +481,9 @@ export function ResultCard({
         {icon}
       </div>
       <div className="text-2xl font-bold">
-        {value}
+        {typeof value === 'number'
+          ? (Number.isInteger(value) ? value : value.toFixed(2))
+          : value}
         <span className="text-sm font-normal text-slate-500 ml-1">{unit}</span>
       </div>
       {formula && (

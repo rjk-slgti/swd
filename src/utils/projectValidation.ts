@@ -31,7 +31,16 @@ export function parseProject(value: unknown): ProjectData {
       return input.map((item, index) => walk(item, template[0], `${path}.${index}`));
     }
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error(`${path}: missing project section.`);
-    return Object.fromEntries(Object.entries(template as object).map(([field, example]) => [field, walk((input as Record<string, unknown>)[field], example, path ? `${path}.${field}` : field)]));
+    const obj = Object.fromEntries(
+      Object.entries(template as object).map(([field, example]) => [
+        field,
+        walk((input as Record<string, unknown>)[field], example, path ? `${path}.${field}` : field),
+      ])
+    );
+    if ((input as Record<string, unknown>).overrideDetails && typeof (input as Record<string, unknown>).overrideDetails === 'object') {
+      obj.overrideDetails = structuredClone((input as Record<string, unknown>).overrideDetails);
+    }
+    return obj;
   }
   const result = walk(value, defaults, '') as ProjectData;
   if (!['A','B'].includes(result.domesticWater.method) || !['learning','professional'].includes(result.designMode)) throw new Error('Invalid calculation or display mode.');
