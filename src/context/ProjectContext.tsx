@@ -32,12 +32,44 @@ interface ProjectContextValue {
   overrideWPSFFactor: (factorId: string, newValue: number, reason: string, reference?: string) => void;
   resetWPSFFactor: (factorId: string) => void;
   resetAllWPSFFactors: () => void;
+  studentMode: boolean;
+  setStudentMode: (enabled: boolean) => void;
+  toggleStudentMode: () => void;
 }
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
   const [storageError, setStorageError] = useState('');
+  const [studentMode, setStudentModeState] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('swd-student-mode');
+      return stored !== 'false';
+    } catch {
+      return true;
+    }
+  });
+
+  const setStudentMode = useCallback((enabled: boolean) => {
+    setStudentModeState(enabled);
+    try {
+      localStorage.setItem('swd-student-mode', String(enabled));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const toggleStudentMode = useCallback(() => {
+    setStudentModeState((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('swd-student-mode', String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
   const [project, setProjectState] = useState<ProjectData>(() => {
     try {
       const active = localStorage.getItem(ACTIVE_KEY);
@@ -310,6 +342,9 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         overrideWPSFFactor,
         resetWPSFFactor,
         resetAllWPSFFactors,
+        studentMode,
+        setStudentMode,
+        toggleStudentMode,
       }}
     >
       {children}

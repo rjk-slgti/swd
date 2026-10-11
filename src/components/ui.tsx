@@ -806,8 +806,13 @@ export function StudentCalculationCard({
   engineeringRuleOfThumb,
   defaultOpen = true,
 }: StudentCalculationCardProps) {
-  const [open, setOpen] = useState(defaultOpen);
+  const { studentMode } = useProject();
+  const [open, setOpen] = useState(studentMode ? defaultOpen : false);
   const [viewMode, setViewMode] = useState<'stepwise' | 'compact'>('stepwise');
+
+  useEffect(() => {
+    setOpen(studentMode ? defaultOpen : false);
+  }, [studentMode, defaultOpen]);
 
   return (
     <div className="border border-indigo-200/90 rounded-xl bg-white shadow-xs overflow-hidden my-4 transition-all">
