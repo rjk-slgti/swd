@@ -925,6 +925,19 @@ export function createSampleProject(): ProjectData {
       { id: 'OCC-06', name: 'Hostel Staff', category: 'Residential Users', count: 0, occupancyPeriod: 24, daysPerWeek: 7, consumptionFactor: 120, unit: 'L/person/day', source: 'WPSF-OCC-06 Prototype Standard Factor', classification: 'PROTOTYPE STANDARD FACTOR' },
       { id: 'OCC-07', name: 'Visitors', category: 'Other Users', count: 0, occupancyPeriod: 4, daysPerWeek: 5, consumptionFactor: 15, unit: 'L/person/day', source: 'WPSF-OCC-07 Prototype Standard Factor', classification: 'PROTOTYPE STANDARD FACTOR' },
     ],
+    departmentDemand: {
+      enabled: false,
+      departments: [
+        'Admin',
+        'Department of Construction Technology',
+        'Department of Automotive',
+        'Department of Food Technology',
+        'Department of Electrical & Electronics Technology',
+        'Department of Mechanical Technology',
+        'Department of Information Communication Technology',
+      ].map((name, index) => ({ id: `DEPT-${index + 1}`, name, population: 0, rateLPerPersonDay: 35, operatingDaysPerWeek: 5 })),
+    },
+    waterSources: [],
     domesticWater: {
       method: 'A',
       useOccupancyRates: true,
@@ -1032,6 +1045,7 @@ export function createSampleProject(): ProjectData {
       { id: 'TD-01', label: 'Underground Bulk Sump', tankType: 'Underground', shape: 'Rectangular', length: 8, width: 5, effectiveDepth: 2.5, freeboard: 0.3, requiredCapacity: 0 },
       { id: 'TD-02', label: 'Roof Distribution Tank', tankType: 'Roof', shape: 'Rectangular', length: 4, width: 3, effectiveDepth: 1.5, freeboard: 0.2, requiredCapacity: 0 },
     ],
+    storageAssets: [],
     pump: {
       requiredFlow: 0,
       staticHead: 15,

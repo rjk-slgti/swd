@@ -171,7 +171,7 @@ export function exportPDF(project: ProjectData, results: AllResults, download = 
       `with a Maximum Daily Demand (MDD) of ${results.mdd?.mddm3 || '—'} m³/day. ` +
       `The estimated peak design flow is ${results.peakFlow?.probablePeakFlow || '—'} L/s.`);
     if (results.storage) addParagraph(`Required domestic storage is ${results.storage.requiredCapacity} m³, split into ${results.storage.undergroundTank} m³ underground and ${results.storage.roofTank} m³ roof tank.`);
-    if (results.pump) addParagraph(`The preliminary pump duty is ${results.pump.designFlowM3h} m³/h at ${results.pump.tdh} m TDH, requiring an estimated ${results.pump.motorPower} kW motor.`);
+    if (results.pump) addParagraph(`The preliminary pump duty is ${results.pump.designFlowM3h} m³/h at ${results.pump.tdh} m TDH, with an estimated electrical input of ${results.pump.electricalInputPower} kW.`);
   }
 
   // --- 2. PROJECT DESCRIPTION ---
@@ -204,8 +204,8 @@ export function exportPDF(project: ProjectData, results: AllResults, download = 
 
   // --- 7. OCCUPANCY ---
   addHeading('7. Occupancy', 1);
-  addTable(['Group', 'Count', 'Factor (L/p/d)', 'Daily Demand (L/d)', 'Classification'],
-    results.occupancy.map(r => [r.group.name, r.group.count, r.group.consumptionFactor, r.dailyDemand.toFixed(2), r.group.classification]));
+  addTable(['Group / Department', 'Count', 'Rate (L/person/operating day)', 'Days/week', 'Average Demand (L/day)', 'Classification'],
+    results.occupancy.map(r => [r.group.name, r.group.count, r.group.consumptionFactor, r.group.daysPerWeek, r.dailyDemand.toFixed(2), r.group.classification]));
 
   // --- 8. WATER DEMAND ---
   addHeading('8. Water Demand Calculation', 1);
@@ -215,6 +215,10 @@ export function exportPDF(project: ProjectData, results: AllResults, download = 
   if (results.specialDemand) {
     addTable(['Category', 'Demand (L/day)', 'Demand (m³/day)'],
       results.specialDemand.breakdown.map(b => [b.name, b.value, (b.value / 1000).toFixed(2)]));
+  }
+  if (results.waterBalance) {
+    addParagraph(`Design source capacity gap: ${(results.waterBalance.sourceCapacityShortfall / 1000).toFixed(2)} m³/day.`);
+    addTable(['Source', 'Location', 'Status', 'Capacity (m³/day)', 'Verified'], project.waterSources.map(s => [s.name, s.location, s.status, s.capacityM3Day, s.verified ? 'Yes' : 'No']));
   }
 
   // --- 9. ADD ---
@@ -251,6 +255,8 @@ export function exportPDF(project: ProjectData, results: AllResults, download = 
     addTable(['Tank', 'Capacity (m³)'],
       [['Underground', results.storage.undergroundTank], ['Roof', results.storage.roofTank],
        ['Ground Level', results.storage.groundTank], ['Elevated', results.storage.elevatedTank]]);
+    addParagraph(`Tank inventory usable capacity: ${results.storage.totalUsableCapacity.toFixed(2)} m³ (${results.storage.existingUsableCapacity.toFixed(2)} m³ existing, ${results.storage.proposedUsableCapacity.toFixed(2)} m³ proposed); shortfall: ${results.storage.capacityShortfall.toFixed(2)} m³.`);
+    addTable(['Tank', 'Location', 'Type', 'Status', 'Gross (m³)', 'Usable (%)', 'Usable (m³)'], project.storageAssets.map(a => [a.name, a.location, a.tankType, a.status, a.grossVolumeM3, a.usableFractionPct, (a.grossVolumeM3 * a.usableFractionPct / 100).toFixed(2)]));
   }
 
   // --- 13. TANK SIZING ---
@@ -270,7 +276,8 @@ export function exportPDF(project: ProjectData, results: AllResults, download = 
     addParagraph(`Design Flow: ${results.pump.designFlow} L/s (${results.pump.designFlowM3h} m³/h)`);
     addParagraph(`TDH: ${results.pump.tdh} m`);
     addParagraph(`Hydraulic Power: ${results.pump.hydraulicPower} kW`);
-    addParagraph(`Motor Power: ${results.pump.motorPower} kW`);
+    addParagraph(`Pump Shaft Power: ${results.pump.shaftPower} kW`);
+    addParagraph(`Estimated Electrical Input: ${results.pump.electricalInputPower} kW`);
   }
 
   addHeading('14.1 Pipework Design', 2);
@@ -426,11 +433,15 @@ export function exportExcel(project: ProjectData, results: AllResults, download 
 
   // 3. Occupancy
   makeSheet('Occupancy', [
-    ['Group', 'Category', 'Count', 'Factor (L/p/d)', 'Daily Demand (L/d)', 'Daily Demand (m³/d)', 'Classification'],
-    ...results.occupancy.map(r => [r.group.name, r.group.category, r.group.count, r.group.consumptionFactor, r.dailyDemand, (r.dailyDemand/1000).toFixed(2), r.group.classification]),
-    ['', '', '', '', 'TOTAL', (results.occupancy.reduce((s,r) => s + r.dailyDemand, 0) / 1000).toFixed(2), ''],
+    ['Group', 'Category', 'Count', 'Factor (L/person/operating day)', 'Operating days/week', 'Average calendar demand (L/day)', 'Average calendar demand (m³/day)', 'Classification'],
+    ...results.occupancy.map(r => [r.group.name, r.group.category, r.group.count, r.group.consumptionFactor, r.group.daysPerWeek, r.dailyDemand, r.dailyDemand/1000, r.group.classification]),
+    ['', '', '', '', '', results.occupancy.reduce((s,r) => s + r.dailyDemand, 0), results.occupancy.reduce((s,r) => s + r.dailyDemand, 0) / 1000, 'TOTAL'],
   ]);
-
+  makeSheet('Department Demand', [
+    ['Department', 'People', 'Rate (L/person/operating day)', 'Operating days/week', 'Average demand (L/day)', 'Average demand (m³/day)'],
+    ...project.departmentDemand.departments.map(d => [d.name, d.population, d.rateLPerPersonDay, d.operatingDaysPerWeek, d.population*d.rateLPerPersonDay*d.operatingDaysPerWeek/7, d.population*d.rateLPerPersonDay*d.operatingDaysPerWeek/7/1000]),
+    ['Schedule used in demand calculations', project.departmentDemand.enabled ? 'Yes' : 'No'],
+  ]);
   // 4. Domestic Demand
   if (results.domestic) {
     makeSheet('Domestic Demand', [
@@ -456,6 +467,8 @@ export function exportExcel(project: ProjectData, results: AllResults, download 
     makeSheet('Water Balance', [
       ['SOURCES', '', ''],
       ...results.waterBalance.sources.map(s => [s.name, s.value, `${s.pct}%`]),
+      ['Registered source capacity (L/day)', results.waterBalance.configuredSourceCapacity, ''],
+      ['Supply shortfall (L/day)', results.waterBalance.sourceCapacityShortfall, ''],
       ['', '', ''],
       ['CONSUMPTION', '', ''],
       ...results.waterBalance.consumption.map(c => [c.name, c.value, `${c.pct}%`]),
@@ -498,6 +511,9 @@ export function exportExcel(project: ProjectData, results: AllResults, download 
       ['Roof', results.storage.roofTank],
       ['Ground Level', results.storage.groundTank],
       ['Elevated', results.storage.elevatedTank],
+      ['Existing usable capacity (m³)', results.storage.existingUsableCapacity],
+      ['Proposed usable capacity (m³)', results.storage.proposedUsableCapacity],
+      ['Storage shortfall (m³)', results.storage.capacityShortfall],
     ]);
   }
 
@@ -505,6 +521,14 @@ export function exportExcel(project: ProjectData, results: AllResults, download 
   makeSheet('Tanks', [
     ['Tank', 'Type', 'Shape', 'L (m)', 'W (m)', 'D (m)', 'Freeboard (m)', 'Gross Vol (m³)', 'Eff Vol (m³)', 'Required (m³)', 'Surplus/Def (m³)', 'Status'],
     ...results.tankDimensions.map(t => [t.tank.label, t.tank.tankType, t.tank.shape, t.tank.length, t.tank.width, t.tank.effectiveDepth, t.tank.freeboard, t.grossVolume, t.effectiveVolume, t.tank.requiredCapacity, t.surplusDeficiency, t.status === 'green' ? 'ADEQUATE' : t.status === 'amber' ? 'MARGINAL' : 'INADEQUATE']),
+  ]);
+  makeSheet('Storage Inventory', [
+    ['Tank', 'Location', 'Type', 'Status', 'Gross volume (m³)', 'Usable (%)', 'Usable capacity (m³)'],
+    ...project.storageAssets.map(a => [a.name, a.location, a.tankType, a.status, a.grossVolumeM3, a.usableFractionPct, a.grossVolumeM3 * a.usableFractionPct / 100]),
+  ]);
+  makeSheet('Water Sources', [
+    ['Source', 'Type', 'Location', 'Status', 'Yield capacity (m³/day)', 'Verified'],
+    ...project.waterSources.map(s => [s.name, s.type, s.location, s.status, s.capacityM3Day, s.verified ? 'Yes' : 'No']),
   ]);
 
   // 11. Pumps
@@ -514,7 +538,8 @@ export function exportExcel(project: ProjectData, results: AllResults, download 
       ['Design Flow (m³/h)', results.pump.designFlowM3h],
       ['TDH (m)', results.pump.tdh],
       ['Hydraulic Power (kW)', results.pump.hydraulicPower],
-      ['Motor Power (kW)', results.pump.motorPower],
+      ['Pump Shaft Power (kW)', results.pump.shaftPower],
+      ['Estimated Electrical Input (kW)', results.pump.electricalInputPower],
       ['Arrangement', project.pump.arrangement],
       ['Formula', results.pump.formula],
     ]);
@@ -662,9 +687,12 @@ export function exportExcel(project: ProjectData, results: AllResults, download 
   const occupancySheet = wb.Sheets['Occupancy'];
   results.occupancy.forEach((row, index) => {
     const n = index + 2;
-    occupancySheet[`E${n}`] = { t: 'n', f: `C${n}*D${n}`, v: row.dailyDemand, z: '#,##0.00' };
-    occupancySheet[`F${n}`] = { t: 'n', f: `E${n}/1000`, v: row.dailyDemand / 1000, z: '#,##0.00' };
+    occupancySheet[`F${n}`] = { t: 'n', f: `C${n}*D${n}*E${n}/7`, v: row.dailyDemand, z: '#,##0.00' };
+    occupancySheet[`G${n}`] = { t: 'n', f: `F${n}/1000`, v: row.dailyDemand / 1000, z: '#,##0.00' };
   });
+  const occupancyTotalRow = results.occupancy.length + 2;
+  occupancySheet[`F${occupancyTotalRow}`] = { t: 'n', f: `SUM(F2:F${occupancyTotalRow - 1})`, v: results.occupancy.reduce((sum, row) => sum + row.dailyDemand, 0), z: '#,##0.00' };
+  occupancySheet[`G${occupancyTotalRow}`] = { t: 'n', f: `F${occupancyTotalRow}/1000`, v: results.occupancy.reduce((sum, row) => sum + row.dailyDemand, 0) / 1000, z: '#,##0.00' };
   if (download) XLSX.writeFile(wb, getFilenames(project).xlsx);
   return wb;
 }
@@ -767,14 +795,18 @@ export async function exportWord(project: ProjectData, results: AllResults, down
 
   // Occupancy
   sections.push(heading('6. Occupancy', HeadingLevel.HEADING_1));
-  sections.push(makeTable(['Group', 'Count', 'Factor', 'Daily Demand (L/d)', 'Classification'],
-    results.occupancy.map(r => [r.group.name, r.group.count, r.group.consumptionFactor, r.dailyDemand.toFixed(0), r.group.classification])));
+  sections.push(makeTable(['Group / Department', 'Count', 'Rate (L/person/operating day)', 'Days/week', 'Average Demand (L/day)', 'Classification'],
+    results.occupancy.map(r => [r.group.name, r.group.count, r.group.consumptionFactor, r.group.daysPerWeek, r.dailyDemand.toFixed(2), r.group.classification])));
 
   // Water Demand
   sections.push(heading('7. Water Demand Calculation', HeadingLevel.HEADING_1));
   if (results.specialDemand) {
     sections.push(makeTable(['Category', 'Demand (L/d)', 'Demand (m³/d)'],
       results.specialDemand.breakdown.map(b => [b.name, b.value, (b.value/1000).toFixed(2)])));
+  }
+  if (results.waterBalance) {
+    sections.push(para(`Design source capacity gap: ${(results.waterBalance.sourceCapacityShortfall / 1000).toFixed(2)} m³/day.`));
+    sections.push(makeTable(['Source', 'Location', 'Status', 'Capacity (m³/day)', 'Verified'], project.waterSources.map(s => [s.name, s.location, s.status, s.capacityM3Day, s.verified ? 'Yes' : 'No'])));
   }
 
   // ADD
@@ -802,6 +834,7 @@ export async function exportWord(project: ProjectData, results: AllResults, down
   sections.push(heading('11. Water Storage', HeadingLevel.HEADING_1));
   if (results.storage) {
     sections.push(para(`Required Storage: ${results.storage.requiredCapacity} m³`));
+    sections.push(para(`Usable tank inventory: ${results.storage.totalUsableCapacity.toFixed(2)} m³; shortfall: ${results.storage.capacityShortfall.toFixed(2)} m³.`));
     sections.push(makeTable(['Tank', 'Capacity (m³)'],
       [['Underground', results.storage.undergroundTank], ['Roof', results.storage.roofTank]]));
   }
@@ -816,7 +849,8 @@ export async function exportWord(project: ProjectData, results: AllResults, down
   if (results.pump) {
     sections.push(para(`Design Flow: ${results.pump.designFlow} L/s (${results.pump.designFlowM3h} m³/h)`));
     sections.push(para(`TDH: ${results.pump.tdh} m`));
-    sections.push(para(`Motor Power: ${results.pump.motorPower} kW`));
+    sections.push(para(`Pump Shaft Power: ${results.pump.shaftPower} kW`));
+    sections.push(para(`Estimated Electrical Input: ${results.pump.electricalInputPower} kW`));
   }
 
   // Wastewater

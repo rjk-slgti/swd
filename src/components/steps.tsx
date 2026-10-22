@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 41327)
+Total output lines: 2535
+
 import { useState } from 'react';
 import { useProject } from '@/context/ProjectContext';
 import {
@@ -161,21 +164,36 @@ export function StepOccupancy() {
     <div className="space-y-6">
       <SectionHeader step={2} title="Occupancy" subtitle="Enter population groups and their water consumption factors" icon={<Users className="w-6 h-6 text-blue-600" />} />
 
+      <Card>
+        <div className="flex items-start justify-between gap-4">
+          <div><h3 className="text-sm font-semibold text-slate-700">Department demand schedule</h3><p className="mt-1 text-xs text-slate-500">Use this schedule for department-level headcounts. Enabling it replaces the general occupancy schedule in demand calculations.</p></div>
+          <ToggleInput label="Calculate by department" checked={project.departmentDemand.enabled} onChange={(enabled) => setProject(p => ({ ...p, departmentDemand: { ...p.departmentDemand, enabled } }))} />
+        </div>
+        {project.departmentDemand.enabled && <div className="mt-4 space-y-2">{project.departmentDemand.departments.map((d, i) => <div key={d.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end rounded-lg bg-slate-50 p-3">
+          <div className="md:col-span-5"><TextInput label="Department" value={d.name} onChange={name => setProject(p => ({ ...p, departmentDemand: { ...p.departmentDemand, departments: p.departmentDemand.departments.map((item, j) => j === i ? { ...item, name } : item) } }))} /></div>
+          <div className="md:col-span-2"><NumberInput label="People" value={d.population} onChange={population => setProject(p => ({ ...p, departmentDemand: { ...p.departmentDemand, departments: p.departmentDemand.departments.map((item, j) => j === i ? { ...item, population } : item) } }))} unit="persons" /></div>
+          <div className="md:col-span-2"><NumberInput label="Use per person" value={d.rateLPerPersonDay} onChange={rateLPerPersonDay => setProject(p => ({ ...p, departmentDemand: { ...p.departmentDemand, departments: p.departmentDemand.departments.map((item, j) => j === i ? { ...item, rateLPerPersonDay } : item) } }))} unit="L/person/operating day" /></div>
+          <div className="md:col-span-2"><NumberInput label="Operating days" value={d.operatingDaysPerWeek} max={7} onChange={operatingDaysPerWeek => setProject(p => ({ ...p, departmentDemand: { ...p.departmentDemand, departments: p.departmentDemand.departments.map((item, j) => j === i ? { ...item, operatingDaysPerWeek } : item) } }))} unit="days/week" /></div>
+          <div className="md:col-span-1 text-right text-sm font-semibold text-blue-700">{(d.population * d.rateLPerPersonDay * d.operatingDaysPerWeek / 7 / 1000).toFixed(2)} m³/day</div>
+        </div>)}<p className="text-xs text-slate-500">Rates are project inputs, not statutory defaults. Department average demand = people × litres/person/operating day × operating days/week ÷ 7.</p></div>}
+      </Card>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <ResultCard label="Total Population" value={results.totalPopulation} unit="persons" color="blue" />
-        <ResultCard label="Total Daily Demand" value={(results.occupancy.reduce((s, r) => s + r.dailyDemand, 0) / 1000).toFixed(2)} unit="m³/day" color="cyan" />
-        <ResultCard label="Occupancy Groups" value={project.occupancy.length} unit="groups" color="slate" />
+        <ResultCard label="Average Daily Demand" value={(results.occupancy.reduce((s, r) => s + r.dailyDemand, 0) / 1000).toFixed(2)} unit="m³/day" color="cyan" />
+        <ResultCard label={project.departmentDemand.enabled ? 'Departments' : 'Occupancy Groups'} value={project.departmentDemand.enabled ? project.departmentDemand.departments.length : project.occupancy.length} unit={project.departmentDemand.enabled ? 'departments' : 'groups'} color="slate" />
       </div>
 
       <EduCard title="How is this calculated?" icon="how">
-        <p><strong>Formula:</strong> Daily Demand = Population × Unit Consumption</p>
-        <p className="mt-1">Each group's daily demand is calculated by multiplying the number of people by their per-person daily water consumption rate. The rates are engineering allowances unless confirmed by a specific standard or client requirement.</p>
+        <p><strong>Formula:</strong> Average calendar-day demand = people × operating-day rate × operating days/week ÷ 7.</p>
+        <p className="mt-1">This converts weekday attendance into a weekly average for source and storage estimates. Check that the entered rate reflects a day when the group is present; weekend residents should use 7 operating days.</p>
       </EduCard>
 
       <EduCard title="What should I enter?" icon="what">
-        <p>Enter the number of people in each group (students, staff, hostel residents, visitors, etc.). Adjust the consumption factor if you have project-specific data. The default values are preliminary engineering allowances for tropical climate institutional buildings.</p>
+        <p>{project.departmentDemand.enabled ? 'Enter the headcount, per-person operating-day rate and working days for each department. Rates are project inputs and should be supported by measured usage or the applicable project design basis.' : 'Enter the number of people in each group (students, staff, hostel residents, visitors, etc.). Adjust the consumption factor if you have project-specific data. The default values are preliminary engineering allowances for tropical climate institutional buildings.'}</p>
       </EduCard>
 
+      {!project.departmentDemand.enabled && <>
       <StudentCalculationCard
         title="Student Derivation: Occupancy Water Demand Accumulation"
         standardRef="BS 6465-1 / CIBSE Guide G / SLS 1373"
@@ -217,8 +235,9 @@ export function StepOccupancy() {
         ]}
         engineeringRuleOfThumb="Day users (schools/offices) require 25–45 L/person/day for ablution, WC flushing, and drinking. Residential hostel occupants require 120–150 L/person/day because of personal showers, meal cooking, and laundry. Misclassifying residential occupants as day users leads to severe water tank starvation!"
       />
+      </>}
 
-      {categories.map((cat) => {
+      {!project.departmentDemand.enabled && categories.map((cat) => {
         const groups = project.occupancy.filter((g) => g.category === cat);
         if (groups.length === 0) return null;
         return (
@@ -236,10 +255,10 @@ export function StepOccupancy() {
                       <NumberInput label="Count" value={g.count} onChange={(v) => updateGroup(g.id, 'count', v)} unit="persons" />
                     </div>
                     <div className="md:col-span-2">
-                      <NumberInput label="Consumption" value={g.consumptionFactor} onChange={(v) => updateGroup(g.id, 'consumptionFactor', v)} unit="L/p/day" />
+                      <NumberInput label="Consumption" value={g.consumptionFactor} onChange={(v) => updateGroup(g.id, 'consumptionFactor', v)} unit="L/person/operating day" />
                     </div>
                     <div className="md:col-span-2">
-                      <NumberInput label="Days/Week" value={g.daysPerWeek} onChange={(v) => updateGroup(g.id, 'daysPerWeek', v)} unit="days" />
+                      <NumberInput label="Days/Week" value={g.daysPerWeek} max={7} onChange={(v) => updateGroup(g.id, 'daysPerWeek', v)} unit="days" />
                     </div>
                     <div className="md:col-span-2">
                       <div className="text-xs text-slate-500">Daily Demand</div>
@@ -261,9 +280,9 @@ export function StepOccupancy() {
         );
       })}
 
-      <button onClick={addGroup} className="px-4 py-2 text-sm font-medium text-blue-600 border border-blue-300 rounded-md hover:bg-blue-50 transition-colors">
+      {!project.departmentDemand.enabled && <button onClick={addGroup} className="px-4 py-2 text-sm font-medium text-blue-600 border border-blue-300 rounded-md hover:bg-blue-50 transition-colors">
         + Add Custom Group
-      </button>
+      </button>}
     </div>
   );
 }
@@ -525,7 +544,7 @@ export function StepSpecialWater() {
 // ============================================================
 
 export function StepWaterBalance() {
-  const { results } = useProject();
+  const { project, setProject, results } = useProject();
 
   return (
     <div className="space-y-6">
@@ -535,12 +554,27 @@ export function StepWaterBalance() {
         The water balance shows where water comes from, where it goes, and how much is consumed or lost. It helps identify opportunities for rainwater harvesting, greywater reuse, and demand reduction.
       </EduCard>
 
+      <Card>
+        <div className="flex items-start justify-between gap-4"><div><h3 className="text-sm font-semibold text-slate-700">Water source inventory</h3><p className="mt-1 text-xs text-slate-500">Enter sustainable yield in m³/day for each source. Rainwater is limited by modeled collection and eligible non-potable demand. Proposed sources are included in the design-capacity check.</p></div><button onClick={() => setProject(p => ({ ...p, waterSources: [...p.waterSources, { id: `SRC-${Date.now()}`, name: 'New source', type: 'NWSDB', location: '', status: 'Existing', capacityM3Day: 0, verified: false }] }))} className="shrink-0 rounded-md border border-blue-300 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50">+ Add source</button></div>
+        <div className="mt-4 space-y-2">{project.waterSources.length === 0 && <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">No source capacities entered. The supply adequacy result cannot be confirmed until sources and their sustainable yields are added.</p>}{project.waterSources.map((s, i) => <div key={s.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end rounded-lg bg-slate-50 p-3">
+          <div className="md:col-span-2"><TextInput label="Source name" value={s.name} onChange={name => setProject(p => ({ ...p, waterSources: p.waterSources.map((x, j) => j === i ? { ...x, name } : x) }))} /></div>
+          <div className="md:col-span-2"><SelectInput label="Source type" value={s.type} options={['NWSDB', 'Tube Well', 'Rainwater Harvesting', 'Other']} onChange={type => setProject(p => ({ ...p, waterSources: p.waterSources.map((x, j) => j === i ? { ...x, type: type as typeof x.type } : x) }))} /></div>
+          <div className="md:col-span-2"><TextInput label="Location / block" value={s.location} onChange={location => setProject(p => ({ ...p, waterSources: p.waterSources.map((x, j) => j === i ? { ...x, location } : x) }))} /></div>
+          <div className="md:col-span-2"><SelectInput label="Status" value={s.status} options={['Existing', 'Proposed']} onChange={status => setProject(p => ({ ...p, waterSources: p.waterSources.map((x, j) => j === i ? { ...x, status: status as typeof x.status } : x) }))} /></div>
+          <div className="md:col-span-2"><NumberInput label="Sustainable yield" value={s.capacityM3Day} onChange={capacityM3Day => setProject(p => ({ ...p, waterSources: p.waterSources.map((x, j) => j === i ? { ...x, capacityM3Day } : x) }))} unit="m³/day" /></div>
+          <div className="md:col-span-1"><ToggleInput label="Verified" checked={s.verified} onChange={verified => setProject(p => ({ ...p, waterSources: p.waterSources.map((x, j) => j === i ? { ...x, verified } : x) }))} /></div>
+          <div className="md:col-span-1 text-right"><button onClick={() => setProject(p => ({ ...p, waterSources: p.waterSources.filter(x => x.id !== s.id) }))} className="text-xs text-red-600 hover:text-red-800">Remove</button></div>
+        </div>)}</div>
+      </Card>
+
       {results.waterBalance ? (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <ResultCard label="Total Supply" value={(results.waterBalance.totalSupply / 1000).toFixed(2)} unit="m³/day" color="blue" />
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <ResultCard label="Available supply" value={(results.waterBalance.totalSupply / 1000).toFixed(2)} unit="m³/day" color="blue" />
             <ResultCard label="Total Demand" value={(results.waterBalance.totalDemand / 1000).toFixed(2)} unit="m³/day" color="amber" />
             <ResultCard label="Wastewater" value={(results.waterBalance.totalWastewater / 1000).toFixed(2)} unit="m³/day" color="red" />
+            <ResultCard label="Design ADD" value={(results.waterBalance.designDemand / 1000).toFixed(2)} unit="m³/day" color="cyan" />
+            <ResultCard label="Source capacity shortfall" value={(results.waterBalance.sourceCapacityShortfall / 1000).toFixed(2)} unit="m³/day" color={results.waterBalance.sourceCapacityShortfall > 0 ? 'red' : 'green'} />
           </div>
 
           <VisualWaterBalanceFlow
@@ -957,343 +991,15 @@ export function StepStorage() {
                 + Add Tank
               </button>
             </div>
-
-            {results.tankDimensions.map((td, i) => (
-              <div key={td.tank.id || i} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-3 items-end p-3 bg-slate-50 border border-slate-200 rounded-lg mb-3">
-                <TextInput label="Label" value={td.tank.label} onChange={(v) => setProject((p) => ({ ...p, tankDimensions: p.tankDimensions.map((t, j) => j === i ? { ...t, label: v } : t) }))} />
-                <SelectInput label="Tank Type" value={td.tank.tankType} onChange={(v) => setProject((p) => ({ ...p, tankDimensions: p.tankDimensions.map((t, j) => j === i ? { ...t, tankType: v as TankDimension['tankType'] } : t) }))} options={['Underground', 'Roof Tank', 'Ground Tank', 'Elevated']} />
-                <SelectInput label="Shape" value={td.tank.shape} onChange={(v) => setProject((p) => ({ ...p, tankDimensions: p.tankDimensions.map((t, j) => j === i ? { ...t, shape: v as 'Rectangular' | 'Cylindrical' } : t) }))} options={['Rectangular', 'Cylindrical']} />
-                <NumberInput label="Length / Dia" value={td.tank.length} onChange={(v) => setProject((p) => ({ ...p, tankDimensions: p.tankDimensions.map((t, j) => j === i ? { ...t, length: v } : t) }))} unit="m" />
-                <NumberInput label="Width" value={td.tank.width} onChange={(v) => setProject((p) => ({ ...p, tankDimensions: p.tankDimensions.map((t, j) => j === i ? { ...t, width: v } : t) }))} unit="m" />
-                <NumberInput label="Eff. Depth" value={td.tank.effectiveDepth} onChange={(v) => setProject((p) => ({ ...p, tankDimensions: p.tankDimensions.map((t, j) => j === i ? { ...t, effectiveDepth: v } : t) }))} unit="m" />
-                <NumberInput label="Freeboard" value={td.tank.freeboard} onChange={(v) => setProject((p) => ({ ...p, tankDimensions: p.tankDimensions.map((t, j) => j === i ? { ...t, freeboard: v } : t) }))} unit="m" />
-                <div className="bg-white p-2 rounded border border-slate-200">
-                  <div className="text-[11px] text-slate-500 font-medium">Eff. Volume</div>
-                  <div className="text-base font-bold text-slate-700">{td.effectiveVolume} m³</div>
-                  <div className="flex items-center gap-1 mt-0.5"><StatusIndicator status={td.status} /><span className="text-[10px] text-slate-500">{td.statusText}</span></div>
-                </div>
-                <div className="flex items-center justify-end pb-1">
-                  <button
-                    onClick={() => setProject((p) => ({ ...p, tankDimensions: p.tankDimensions.filter((_, j) => j !== i) }))}
-                    className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
-                    title="Remove Tank"
-                    aria-label="Remove Tank"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
           </Card>
-        </>
-      )}
-    </div>
-  );
-}
-
-// ============================================================
-// STEP 8 — PUMP DESIGN
-// ============================================================
-
-export function StepPumpDesign() {
-  const { project, setProject, results } = useProject();
-  const p = project.pump;
-
-  const update = (field: keyof typeof p, value: number | string) => {
-    setProject((proj) => ({ ...proj, pump: { ...proj.pump, [field]: value } }));
-  };
-
-  return (
-    <div className="space-y-6">
-      <SectionHeader step={8} title="Pump Design" subtitle="Calculate pump duty point and motor power" icon={<Fuel className="w-6 h-6 text-blue-600" />} />
-
-      <EduCard title="How is this calculated?" icon="how">
-        <p><strong>Total Dynamic Head (TDH)</strong> = Static Head + Pipe Friction + Fitting Losses + Equipment Losses + Required Residual Pressure</p>
-        <p className="mt-1"><strong>Hydraulic Power</strong> = Q × H × ρ × g / 3600 (kW, with Q in m³/h)</p>
-        <p><strong>Motor Power</strong> = Hydraulic Power / (Pump Efficiency × Motor Efficiency)</p>
-      </EduCard>
-
-      <Card>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <NumberInput label="Required Flow" value={p.requiredFlow} onChange={(v) => update('requiredFlow', v)} unit="L/s" tooltip="Leave 0 to auto-use peak flow" />
-          <NumberInput label="Static Head" value={p.staticHead} onChange={(v) => update('staticHead', v)} unit="m" />
-          <NumberInput label="Pipe Friction" value={p.pipeFriction} onChange={(v) => update('pipeFriction', v)} unit="m" />
-          <NumberInput label="Fitting Losses" value={p.fittingLosses} onChange={(v) => update('fittingLosses', v)} unit="m" />
-          <NumberInput label="Equipment Losses" value={p.equipmentLosses} onChange={(v) => update('equipmentLosses', v)} unit="m" />
-          <NumberInput label="Residual Pressure" value={p.requiredResidualPressure} onChange={(v) => update('requiredResidualPressure', v)} unit="m" />
-          <NumberInput label="Safety Margin" value={p.safetyMargin} onChange={(v) => update('safetyMargin', v)} unit="%" />
-          <NumberInput label="Pump Efficiency" value={p.pumpEfficiency} onChange={(v) => update('pumpEfficiency', v)} unit="%" />
-          <NumberInput label="Motor Efficiency" value={p.motorEfficiency} onChange={(v) => update('motorEfficiency', v)} unit="%" />
-          <SelectInput label="Arrangement" value={p.arrangement} onChange={(v) => update('arrangement', v)} options={['Duty', 'Duty/Standby', 'Duty/Assist/Standby']} />
-        </div>
-      </Card>
-
-      {!results.pump && <p role="status" className="text-amber-700">Additional design information required: provide a positive flow and pump/motor efficiencies, or confirm peak flow in Step 6.</p>}
-      {results.pump && (
-        <>
-          <CalcDisplay
-            title="Pump Duty Point"
-            result={`${results.pump.designFlowM3h} m³/h @ ${results.pump.tdh} m`}
-            unit="TDH"
-            formula={results.pump.formula}
-            substitution={results.pump.substitution}
-            status={p.classification}
-          />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <ResultCard label="Design Flow" value={results.pump.designFlow} unit="L/s" color="blue" />
-            <ResultCard label="TDH" value={results.pump.tdh} unit="m" color="cyan" />
-            <ResultCard label="Hydraulic Power" value={results.pump.hydraulicPower} unit="kW" color="amber" />
-            <ResultCard label="Motor Power" value={results.pump.motorPower} unit="kW" color="green" />
-          </div>
-
-          <VisualPumpSystemCurve
-            designFlowLps={results.pump.designFlow}
-            designFlowM3h={results.pump.designFlowM3h}
-            tdhM={results.pump.tdh}
-            staticHeadM={p.staticHead}
-            frictionHeadM={p.pipeFriction}
-            residualHeadM={p.requiredResidualPressure}
-            hydraulicPowerKw={results.pump.hydraulicPower}
-            motorPowerKw={results.pump.motorPower}
-            pumpEfficiencyPct={p.pumpEfficiency}
-            motorEfficiencyPct={p.motorEfficiency}
-          />
-
-          <StudentCalculationCard
-            title="Student Derivation: Total Dynamic Head (TDH) & Pump Motor Power Sizing"
-            standardRef="ISO 9906 / BS EN 806-4 / Hydraulic Institute Standards"
-            governingFormula="TDH = [H_static + h_f + h_fit + H_res] × [1 + Margin%]   |   P_motor = [ρ × g × Q × TDH] / [1000 × η_pump × η_motor]"
-            formulaVariables={[
-              { symbol: 'Q_des', meaning: 'Operating Duty Flow', unit: 'm³/h', value: results.pump.designFlowM3h },
-              { symbol: 'TDH', meaning: 'Total Dynamic Head', unit: 'm', value: results.pump.tdh },
-              { symbol: 'H_static', meaning: 'Physical Static Elevation Lift', unit: 'm', value: p.staticHead },
-              { symbol: 'P_hyd', meaning: 'Hydraulic Water Power Output', unit: 'kW', value: results.pump.hydraulicPower },
-              { symbol: 'P_motor', meaning: 'Shaft Motor Brake Power', unit: 'kW', value: results.pump.motorPower },
-              { symbol: 'η_pump', meaning: 'Pump Impeller Hydraulic Efficiency', unit: '%', value: p.pumpEfficiency },
-              { symbol: 'η_motor', meaning: 'Electric Motor Wire-to-Shaft Efficiency', unit: '%', value: p.motorEfficiency },
-            ]}
-            steps={[
-              {
-                stepNumber: 1,
-                title: 'Total Dynamic Head (TDH) Summation',
-                description: 'Calculate pump required lift by summing static elevation rise, pipe friction, localized fitting resistance, and terminal delivery pressure.',
-                formula: 'TDH = (H_static + h_friction + h_fittings + H_residual) × (1 + Margin% / 100)',
-                mathSubstitution: `(${p.staticHead}m + ${p.pipeFriction}m + ${p.fittingLosses}m + ${p.requiredResidualPressure}m) × (1 + ${p.safetyMargin}/100)`,
-                intermediateResult: results.pump.tdh.toFixed(2),
-                unit: 'm head',
-              },
-              {
-                stepNumber: 2,
-                title: 'Hydraulic Water Power Output (P_hyd)',
-                description: 'Calculate theoretical mechanical work performed on fluid mass per second.',
-                formula: 'P_hyd (kW) = (ρ × g × Q × TDH) / 1000 = (9.81 × Q_Lps × TDH) / 1000',
-                mathSubstitution: `(1000 kg/m³ × 9.81 m/s² × (${results.pump.designFlow} / 1000 m³/s) × ${results.pump.tdh} m) / 1000`,
-                intermediateResult: results.pump.hydraulicPower.toFixed(2),
-                unit: 'kW',
-              },
-              {
-                stepNumber: 3,
-                title: 'Motor Shaft Power Factoring Wire-to-Water Inefficiencies',
-                description: 'Divide hydraulic power by centrifugal impeller efficiency and electric induction motor stator/rotor losses.',
-                formula: 'P_motor = P_hyd / ((η_pump / 100) × (η_motor / 100))',
-                mathSubstitution: `${results.pump.hydraulicPower.toFixed(2)} kW / ((${p.pumpEfficiency} / 100) × (${p.motorEfficiency} / 100))`,
-                intermediateResult: results.pump.motorPower.toFixed(2),
-                unit: 'kW',
-              },
-            ]}
-            engineeringRuleOfThumb="Always specify Duty/Standby pumps (1 Duty + 1 Standby, each 100% capacity) for critical infrastructure so pump failure does not cut campus water supply. Furthermore, select standard commercial motor frame (e.g. 1.5 kW or 2.2 kW) to prevent motor overload during high-flow runout condition."
-          />
-        </>
-      )}
-
-      <EduCard title="Engineering Note" icon="tip">
-        Pump recommendations are preliminary. Final pump selection must be verified against manufacturer's pump curves, NPSH requirements, and system head curves.
-      </EduCard>
-    </div>
-  );
-}
-
-// ============================================================
-// STEP 9 — WASTEWATER
-// ============================================================
-
-export function StepWastewater() {
-  const { project, setProject, results } = useProject();
-
-  return (
-    <div className="space-y-6">
-      <SectionHeader step={9} title="Wastewater" subtitle="Calculate wastewater generation from water consumption" icon={<Trash2 className="w-6 h-6 text-blue-600" />} />
-
-      <EduCard title="How is this calculated?" icon="how">
-        <p><strong>Formula:</strong> Wastewater = Indoor Demand × Sewer Return Factor + Process/Kitchen/Hostel/Other Wastewater</p>
-        <p className="mt-1">Additional wastewater fields must represent sources outside the modeled domestic/canteen/workshop baseline; otherwise leave them at zero to avoid double counting. The sewer return factor represents the proportion of supplied water that returns as wastewater. Irrigation losses are NOT included as wastewater.</p>
-      </EduCard>
-
-      <Card>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <NumberInput max={100} label="Sewer Return Factor" value={project.wastewater.sewerReturnFactor} onChange={(v) => setProject((p) => ({ ...p, wastewater: { ...p.wastewater, sewerReturnFactor: v } }))} unit="%" source={project.wastewater.source} status={project.wastewater.classification} />
-          <NumberInput label="Process Wastewater" value={project.wastewater.processWastewater} onChange={(v) => setProject((p) => ({ ...p, wastewater: { ...p.wastewater, processWastewater: v } }))} unit="L/day" />
-          <NumberInput label="Kitchen Wastewater" value={project.wastewater.kitchenWastewater} onChange={(v) => setProject((p) => ({ ...p, wastewater: { ...p.wastewater, kitchenWastewater: v } }))} unit="L/day" />
-          <NumberInput label="Hostel Wastewater" value={project.wastewater.hostelWastewater} onChange={(v) => setProject((p) => ({ ...p, wastewater: { ...p.wastewater, hostelWastewater: v } }))} unit="L/day" />
-        </div>
-      </Card>
-
-      {results.wastewater && (
-        <>
-          <CalcDisplay
-            title="Wastewater Generation"
-            result={(results.wastewater.totalWastewater / 1000).toFixed(2)}
-            unit="m³/day"
-            formula={results.wastewater.formula}
-            substitution={results.wastewater.substitution}
-            status={project.wastewater.classification}
-          />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <ResultCard label="Indoor Demand" value={(results.wastewater.indoorDemand / 1000).toFixed(2)} unit="m³/d" color="blue" />
-            <ResultCard label="Wastewater" value={results.wastewater.wastewaterM3Day} unit="m³/d" color="red" />
-            <ResultCard label="Monthly" value={results.wastewater.wastewaterM3Month} unit="m³/mo" color="amber" />
-            <ResultCard label="Annual" value={results.wastewater.wastewaterM3Year} unit="m³/yr" color="slate" />
-          </div>
-
-          <StudentCalculationCard
-            title="Student Derivation: Sanitary Wastewater Discharge & Return Rate"
-            standardRef="SLS 745 / BS EN 12056 / CIBSE Guide G Table 3"
-            governingFormula="Q_ww = Q_indoor × [SewerReturn% / 100] + Q_process + Q_kitchen"
-            formulaVariables={[
-              { symbol: 'Q_indoor', meaning: 'Net Indoor Potable Water Feed', unit: 'm³/day', value: (results.wastewater.indoorDemand / 1000).toFixed(2) },
-              { symbol: 'Return%', meaning: 'Sanitary Sewer Return Factor', unit: '%', value: project.wastewater.sewerReturnFactor },
-              { symbol: 'Q_process', meaning: 'Segregated Industrial/Lab Waste', unit: 'L/day', value: project.wastewater.processWastewater },
-              { symbol: 'Q_kitchen', meaning: 'Canteen Kitchen Grease Waste', unit: 'L/day', value: project.wastewater.kitchenWastewater },
-              { symbol: 'Q_ww', meaning: 'Total Daily Sanitary Discharge', unit: 'm³/day', value: results.wastewater.wastewaterM3Day },
-            ]}
-            steps={[
-              {
-                stepNumber: 1,
-                title: 'Indoor Sanitary Feed Extraction',
-                description: 'Extract indoor domestic consumption from previous steps (ablution, showering, toilet flushing, and staff drinking).',
-                formula: 'Q_indoor = Q_domestic + Q_hostel',
-                mathSubstitution: `Indoor Demand = ${(results.wastewater.indoorDemand).toFixed(0)} L/day = ${(results.wastewater.indoorDemand / 1000).toFixed(2)} m³/day`,
-                intermediateResult: (results.wastewater.indoorDemand / 1000).toFixed(2),
-                unit: 'm³/day',
-              },
-              {
-                stepNumber: 2,
-                title: 'Sewer Return Factor (Consumptive Loss Deduction)',
-                description: 'Multiply indoor consumption by the sewer return factor (typically 80% to 90%). The remaining 10% to 20% represents metabolic consumption, food absorption, and cleaning evaporation.',
-                formula: 'Q_domestic_ww = Q_indoor × (SewerReturn% / 100)',
-                mathSubstitution: `${(results.wastewater.indoorDemand / 1000).toFixed(2)} m³/day × (${project.wastewater.sewerReturnFactor} / 100)`,
-                intermediateResult: ((results.wastewater.indoorDemand / 1000) * (project.wastewater.sewerReturnFactor / 100)).toFixed(2),
-                unit: 'm³/day',
-              },
-              {
-                stepNumber: 3,
-                title: 'Auxiliary Wastewater & STP Daily Hydraulic Inflow',
-                description: 'Sum domestic sewer flow with dedicated kitchen grease interceptor lines and workshop process effluent.',
-                formula: 'Q_total_ww = Q_domestic_ww + (Q_process + Q_kitchen + Q_hostel) / 1000',
-                mathSubstitution: `${((results.wastewater.indoorDemand / 1000) * (project.wastewater.sewerReturnFactor / 100)).toFixed(2)} + (${project.wastewater.processWastewater} + ${project.wastewater.kitchenWastewater} + ${project.wastewater.hostelWastewater}) / 1000`,
-                intermediateResult: results.wastewater.wastewaterM3Day,
-                unit: 'm³/day',
-              },
-            ]}
-            engineeringRuleOfThumb="Never add outdoor irrigation or rainwater to the sanitary sewer! Irrigation water transpires naturally into the atmosphere. Including irrigation causes extreme oversizing of Sewage Treatment Plants (STP), washing away biological biomass and causing wastewater treatment failure."
-          />
-        </>
-      )}
-    </div>
-  );
-}
-
-// ============================================================
-// STEP 10 — RAINWATER HARVESTING
-// ============================================================
-
-export function StepRainwater() {
-  const { project, setProject, results } = useProject();
-  const rw = project.rainwater;
-
-  const update = (field: keyof typeof rw, value: number | boolean) => {
-    setProject((p) => ({ ...p, rainwater: { ...p.rainwater, [field]: value } }));
-  };
-
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-  return (
-    <div className="space-y-6">
-      <SectionHeader step={10} title="Rainwater Harvesting" subtitle="Calculate rainwater harvesting potential from roof catchment" icon={<CloudRain className="w-6 h-6 text-blue-600" />} />
-
-      <EduCard title="How is this calculated?" icon="how">
-        <p><strong>Formula:</strong> Harvested = Rainfall × Catchment Area × Runoff Coefficient × Filter Efficiency × Collection Efficiency</p>
-        <p className="mt-1">The runoff coefficient accounts for roof surface losses. Filter and collection efficiency account for system losses. First-flush diversion removes initial contaminated runoff.</p>
-      </EduCard>
-
-      <Card>
-        <ToggleInput label="Enable Rainwater Harvesting" checked={rw.enabled} onChange={(v) => update('enabled', v)} />
-        {rw.enabled && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-            <NumberInput label="Roof Area" value={rw.roofArea} onChange={(v) => update('roofArea', v)} unit="m²" />
-            <NumberInput label="Annual Rainfall" value={rw.annualRainfall} onChange={(v) => update('annualRainfall', v)} unit="mm" source={rw.source} status={rw.classification} />
-            <NumberInput label="Runoff Coefficient" value={rw.runoffCoefficient} onChange={(v) => update('runoffCoefficient', v)} unit="—" step={0.05} />
-            <NumberInput label="First-Flush Loss" value={rw.firstFlushLoss} onChange={(v) => update('firstFlushLoss', v)} unit="mm" step={0.1} />
-            <NumberInput label="Filter Efficiency" value={rw.filterEfficiency} onChange={(v) => update('filterEfficiency', v)} unit="%" />
-            <NumberInput label="Collection Efficiency" value={rw.collectionEfficiency} onChange={(v) => update('collectionEfficiency', v)} unit="%" />
-          </div>
-        )}
-      </Card>
-
-      {rw.enabled && results.rainwater && (
-        <>
-          <CalcDisplay
-            title="Annual Rainwater Harvesting Potential"
-            result={results.rainwater.annualHarvested.toFixed(2)}
-            unit="m³/year"
-            formula={results.rainwater.formula}
-            substitution={results.rainwater.substitution}
-            status={rw.classification}
-          />
 
           <Card>
-            <h3 className="text-sm font-semibold mb-3">Monthly Harvesting Potential</h3>
-            <BarChart
-              data={months.map((m, i) => ({ label: m, value: results.rainwater!.monthlyHarvested[i] || 0, color: 'bg-cyan-500' }))}
-              unit="m³"
-            />
-          </Card>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <ResultCard label="Annual Harvested" value={results.rainwater.annualHarvested} unit="m³/yr" color="cyan" />
-            <ResultCard label="Daily Average" value={(results.rainwater.nonPotableOffset / 1000).toFixed(2)} unit="m³/d" color="blue" />
-            <ResultCard label="Non-Potable Offset" value={results.rainwater.nonPotableOffset} unit="L/d" color="green" />
-          </div>
-
-          <StudentCalculationCard
-            title="Student Derivation: Rational Rainwater Yield & First-Flush Diversion"
-            standardRef="BS 8515 / SLS 1553 / CIBSE Guide G Section 5"
-            governingFormula="V_annual = A_roof × [P_annual - FF_loss] × C_runoff × η_filter × η_collection / 1000"
-            formulaVariables={[
-              { symbol: 'A_roof', meaning: 'Horizontally Projected Roof Footprint', unit: 'm²', value: rw.roofArea },
-              { symbol: 'P_annual', meaning: 'Mean Annual Rainfall Depth', unit: 'mm/yr', value: rw.annualRainfall },
-              { symbol: 'C_r', meaning: 'Impervious Roof Runoff Factor', unit: '—', value: rw.runoffCoefficient },
-              { symbol: 'FF_loss', meaning: 'First-Flush Sanitary Diversion', unit: 'mm', value: rw.firstFlushLoss },
-              { symbol: 'η_filter', meaning: 'Self-Cleaning Vortex Filter Yield', unit: '%', value: rw.filterEfficiency },
-              { symbol: 'η_coll', meaning: 'Gutter & Tank Overflow Hydraulics', unit: '%', value: rw.collectionEfficiency },
-              { symbol: 'V_harvest', meaning: 'Net Usable Non-Potable Water', unit: 'm³/yr', value: results.rainwater.annualHarvested.toFixed(2) },
-            ]}
-            steps={[
-              {
-                stepNumber: 1,
-                title: 'Theoretical Gross Catchment Precipitation',
-                description: 'Compute theoretical volume falling on the projected horizontal roof catchment area.',
-                formula: 'V_gross = (A_roof × P_annual) / 1000',
-                mathSubstitution: `(${rw.roofArea} m² × ${rw.annualRainfall} mm) / 1000`,
-                intermediateResult: ((rw.roofArea * rw.annualRainfall) / 1000).toFixed(1),
-                unit: 'm³/yr',
-              },
-              {
-                stepNumber: 2,
-                title: 'First-Flush Sanitary Contaminant Diversion',
-                description: 'Deduct initial rainfall depth (typically 1.0–2.0 mm) to wash roof surfaces and flush away bird droppings, dust, and organic debris before storage.',
-                formula: 'P_effective = max(0, P_annual - FirstFlush_Loss)',
-                mathSubstitution: `${rw.annualRainfall} mm - ${rw.firstFlushLoss} mm`,
+            <div className="flex items-start justify-between gap-4"><div><h3 className="text-sm font-semibold text-slate-700">Tank and storage inventory</h3><p className="mt-1 text-xs text-slate-500">Record each existing or proposed tank by location and usable volume. Usable volume = gross tank volume × usable fraction; dead storage is excluded. Required capacity is compared with the combined inventory.</p></div><button onClick={() => setProject(p => ({ ...p, storageAssets: [...p.storageAssets, { id: `ST-${Date.now()}`, name: 'New tank', location: '', tankType: 'Ground Level', status: 'Existing', grossVolumeM3: 0, usableFractionPct: 90 }] }))} className="shrink-0 rounded-md border border-blue-300 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50">+ Add tank</button></div>
+            <div className="mt-4 space-y-2">{project.storageAssets.length === 0 && <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">No tank inventory recorded. Add current and planned tanks to calculate the storage deficit.</p>}{project.storageAssets.map((a, i) => <div key={a.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end rounded-lg bg-slate-50 p-3">
+              <div className="md:col-span-2"><TextInput label="Tank name" value={a.name} onChange={name => setProject(p => ({ ...p, storageAssets: p.storageAssets.map((x, j) => j === i ? { ...x, name } : x) }))} /></div>
+              <div className="md:col-span-2"><TextInput label="Location / block" value={a.location} onChange={location => setProject(p => ({ ...p, storageAssets: p.storageAssets.map((x, j) => j === i ? { ...x, location } : x) }))} /></div>
+              <div className="md:col-span-2"><SelectInput label="Tank location type" value={a.tankType} options={['Underground', 'Ground Level', 'Roof', 'Elevated']} onChange={tankType => setProject(p => ({ ...p, storageAssets: p.storageAssets.map((x, j) => j === i ? { ...x, tankType: tankType as typeof x.tankType } : x) }))} /></div>
+              <div className="md:col-span-2"><SelectInput label="Status" value={a.status} options={['Existing', 'Proposed']} onChange={status => setProject(p => ({ ...p…6327 tokens truncated…firstFlushLoss} mm`,
                 intermediateResult: (Math.max(0, rw.annualRainfall - rw.firstFlushLoss)).toFixed(1),
                 unit: 'mm',
               },

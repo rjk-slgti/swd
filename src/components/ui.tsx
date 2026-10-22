@@ -173,6 +173,8 @@ export function NumberInput({
   status,
   isPrototypeDefault,
 }: NumberInputProps) {
+  const upperBound = max ?? (unit === '%' ? 100 : 1e9);
+  const invalid = value < min || value > upperBound;
   const [text, setText] = useState<string>(String(value ?? 0));
 
   useEffect(() => {
@@ -187,8 +189,7 @@ export function NumberInput({
     }
     const v = parseFloat(raw);
     if (Number.isFinite(v)) {
-      const clamped = Math.max(min, Math.min(max ?? (unit === '%' ? 100 : 1e9), v));
-      onChange(clamped);
+      onChange(v);
     }
   };
 
@@ -199,9 +200,8 @@ export function NumberInput({
     } else {
       const v = parseFloat(text);
       if (Number.isFinite(v)) {
-        const clamped = Math.max(min, Math.min(max ?? (unit === '%' ? 100 : 1e9), v));
-        setText(String(clamped));
-        onChange(clamped);
+        setText(String(v));
+        onChange(v);
       } else {
         setText(String(value ?? 0));
       }
@@ -224,12 +224,14 @@ export function NumberInput({
           onChange={handleChange}
           onBlur={handleBlur}
           min={min}
-          max={max}
+          max={upperBound}
           step={step}
-          className="min-w-0 w-full flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          aria-invalid={invalid}
+          className={`min-w-0 w-full flex-1 px-3 py-2 border rounded-md text-sm focus:ring-2 focus:border-transparent transition-all ${invalid ? 'border-red-500 focus:ring-red-500' : 'border-slate-300 focus:ring-blue-500'}`}
         />
         {unit && <span className="text-xs text-slate-500 whitespace-nowrap min-w-[70px]">{unit}</span>}
       </div>
+      {invalid && <p className="text-xs text-red-600">Enter a value from {min} to {upperBound} {unit ?? ''}.</p>}
       {(source || status) && (
         <div className="flex flex-wrap items-center gap-2 text-xs pt-0.5">
           {source && <span className="text-slate-400 truncate max-w-xs" title={source}>Src: {source}</span>}

@@ -69,19 +69,28 @@ export function M3toL(m3: number): number {
 // ============================================================
 
 export function calculateOccupancyDemand(data: ProjectData): OccupancyResult[] {
-  return data.occupancy.map((g) => {
-    const dailyDemand = safeMul(g.count, g.consumptionFactor);
+  const groups = data.departmentDemand?.enabled
+    ? data.departmentDemand.departments.map((d) => ({ ...d, count: d.population, consumptionFactor: d.rateLPerPersonDay, daysPerWeek: d.operatingDaysPerWeek, id: d.id, name: d.name, category: 'Day Users' as const, occupancyPeriod: 8, unit: 'L/person/day', source: 'Department schedule', classification: 'User Defined' as const }))
+    : data.occupancy;
+  return groups.map((g) => {
+    const dailyDemand = safeMul(safeMul(g.count, g.consumptionFactor), g.daysPerWeek / 7);
     return {
       group: g,
       dailyDemand,
-      formula: 'Daily Demand = Population × Unit Consumption Factor',
-      substitution: `${g.count} persons × ${g.consumptionFactor} L/p/d = ${roundTo(dailyDemand, 2)} L/day`,
+      formula: 'Average calendar-day demand = Population × operating-day rate × operating days/week ÷ 7',
+      substitution: `${g.count} × ${g.consumptionFactor} × ${g.daysPerWeek} ÷ 7 = ${roundTo(dailyDemand, 2)} L/day`,
     };
   });
 }
 
 export function calculateTotalPopulation(data: ProjectData): number {
-  return data.occupancy.reduce((sum, g) => sum + (g.count || 0), 0);
+  const counts = data.departmentDemand?.enabled ? data.departmentDemand.departments.map((d) => d.population) : data.occupancy.map((g) => g.count);
+  return counts.reduce((sum, n) => sum + (n || 0), 0);
+}
+
+function calculateDemandPopulationEquivalent(data: ProjectData): number {
+  if (data.departmentDemand?.enabled) return data.departmentDemand.departments.reduce((sum, d) => sum + d.population * d.operatingDaysPerWeek / 7, 0);
+  return data.occupancy.reduce((sum, g) => sum + g.count * g.daysPerWeek / 7, 0);
 }
 
 export function calculateOccupancyTotalDemand(results: OccupancyResult[]): number {
@@ -96,8 +105,6 @@ export function calculateDomesticDemand(
   data: ProjectData,
   occupancyResults: OccupancyResult[]
 ): DomesticResult | null {
-  const totalPop = calculateTotalPopulation(data);
-
   if (data.domesticWater.method === 'A' && data.domesticWater.useOccupancyRates) {
     const totalDemand = calculateOccupancyTotalDemand(occupancyResults);
     return {
@@ -108,32 +115,34 @@ export function calculateDomesticDemand(
         value: r.dailyDemand,
         unit: 'L/day',
       })),
-      formula: 'Domestic Demand = Σ (Group Population × Group Consumption Factor)',
+      formula: 'Average calendar-day domestic demand = Σ (population × operating-day allowance × operating days/week ÷ 7)',
       substitution:
-        occupancyResults.map((r) => `${r.group.count} × ${r.group.consumptionFactor}`).join(' + ') +
+        occupancyResults.map((r) => `${r.group.count} × ${r.group.consumptionFactor} × ${r.group.daysPerWeek} ÷ 7`).join(' + ') +
         ` = ${roundTo(totalDemand, 2)} L/day`,
     };
   }
 
   if (data.domesticWater.method === 'A') {
-    const totalDemand = safeMul(totalPop, data.domesticWater.perPersonRate);
+    const equivalentPop = calculateDemandPopulationEquivalent(data);
+    const totalDemand = safeMul(equivalentPop, data.domesticWater.perPersonRate);
     return {
       totalDemand,
       method: 'A',
       breakdown: [
-        { name: 'Total Population', value: totalPop, unit: 'persons' },
+        { name: 'Population-weighted average', value: equivalentPop, unit: 'person-equivalents' },
         { name: 'Per-person Rate', value: data.domesticWater.perPersonRate, unit: 'L/person/day' },
         { name: 'Domestic Demand', value: roundTo(totalDemand, 2), unit: 'L/day' },
       ],
-      formula: 'Domestic Demand = Total Population × Per-person Rate',
-      substitution: `${totalPop} × ${data.domesticWater.perPersonRate} = ${roundTo(totalDemand, 2)} L/day`,
+      formula: 'Average calendar-day demand = Σ (population × operating days/week ÷ 7) × per-person rate',
+      substitution: `${roundTo(equivalentPop, 2)} person-equivalents × ${data.domesticWater.perPersonRate} = ${roundTo(totalDemand, 2)} L/day`,
     };
   }
 
   // Method B — end-use breakdown
+  const equivalentPop = calculateDemandPopulationEquivalent(data);
   const breakdown = data.domesticWater.endUses.map((eu) => ({
     name: eu.name,
-    value: safeMul(totalPop, eu.perPersonPerDay),
+    value: safeMul(equivalentPop, eu.perPersonPerDay),
     unit: 'L/day',
   }));
   const totalDemand = breakdown.reduce((sum, b) => sum + b.value, 0);
@@ -142,11 +151,10 @@ export function calculateDomesticDemand(
     totalDemand,
     method: 'B',
     breakdown,
-    formula: 'Domestic Demand = Σ (Total Population × End-use Rate per person)',
-    substitution:
-      breakdown
-        .map((b) => `${totalPop} × ${data.domesticWater.endUses.find((e) => e.name === b.name)?.perPersonPerDay}`)
-        .join(' + ') + ` = ${roundTo(totalDemand, 2)} L/day`,
+    formula: 'Average calendar-day demand = Σ (population × operating days/week ÷ 7 × end-use rate per person)',
+    substitution: breakdown
+      .map((b) => `${roundTo(equivalentPop, 2)} person-equivalents × ${data.domesticWater.endUses.find((e) => e.name === b.name)?.perPersonPerDay}`)
+      .join(' + ') + ` = ${roundTo(totalDemand, 2)} L/day`,
   };
 }
 
@@ -168,7 +176,7 @@ export function calculateSpecialDemand(data: ProjectData): SpecialDemandResult |
   // Workshops
   let workshopDemand = 0;
   data.workshops.forEach((w) => {
-    const wd = safeMul(w.waterPerEvent, w.eventsPerDay);
+    const wd = safeMul(safeMul(w.waterPerEvent, w.eventsPerDay), w.operatingDays / 7);
     workshopDemand += wd;
   });
   if (workshopDemand > 0) {
@@ -236,23 +244,27 @@ export function calculateWaterBalance(
   special: SpecialDemandResult | null,
   occupancyResults: OccupancyResult[],
   rainwater: RainwaterResult | null,
-  greywater: GreywaterResult | null
+  greywater: GreywaterResult | null,
+  add: ADDResult | null = null,
 ): WaterBalanceResult | null {
   if (!domestic || !special) return null;
 
   const totalDemand = domestic.totalDemand + special.total;
+  const designDemand = add?.finalADD ?? totalDemand;
 
-  // Sources
-  const rainwaterDaily = rainwater?.nonPotableOffset ?? 0;
   const greywaterDaily = greywater ? greywater.potableWaterReduction : 0;
-  const recycledTotal = rainwaterDaily + greywaterDaily;
-  const municipalSupply = Math.max(0, totalDemand - recycledTotal);
-
-  const sources = [
-    { name: 'Municipal / Borewell', value: roundTo(municipalSupply, 2), pct: totalDemand > 0 ? roundTo(safeDiv(municipalSupply, totalDemand) * 100, 1) : 0 },
-    { name: 'Rainwater', value: roundTo(rainwaterDaily, 2), pct: totalDemand > 0 ? roundTo(safeDiv(rainwaterDaily, totalDemand) * 100, 1) : 0 },
-    { name: 'Recycled Greywater', value: roundTo(greywaterDaily, 2), pct: totalDemand > 0 ? roundTo(safeDiv(greywaterDaily, totalDemand) * 100, 1) : 0 },
-  ];
+  const dailyRainYieldM3 = (rainwater?.nonPotableOffset ?? 0) / 1000;
+  const sourceTypes = ['NWSDB', 'Tube Well', 'Rainwater Harvesting', 'Other'] as const;
+  const sources = sourceTypes.map((type) => {
+    const entries = data.waterSources.filter((s) => s.type === type);
+    const enteredCapacityM3 = entries.reduce((sum, s) => sum + s.capacityM3Day, 0);
+    const capacityM3 = type === 'Rainwater Harvesting' ? Math.min(enteredCapacityM3, dailyRainYieldM3) : enteredCapacityM3;
+    const value = roundTo(capacityM3 * 1000, 2);
+    return { name: `${type} (${entries.filter(s => s.status === 'Existing').length} existing / ${entries.filter(s => s.status === 'Proposed').length} proposed)`, value, pct: designDemand > 0 ? roundTo(safeDiv(value, designDemand) * 100, 1) : 0 };
+  });
+  const configuredSourceCapacity = sources.reduce((sum, s) => sum + s.value, 0);
+  const sourceCapacityShortfall = Math.max(0, designDemand - configuredSourceCapacity - greywaterDaily);
+  sources.push({ name: 'Recycled Greywater (reuse potential)', value: roundTo(greywaterDaily, 2), pct: designDemand > 0 ? roundTo(safeDiv(greywaterDaily, designDemand) * 100, 1) : 0 });
 
   // Consumption categories
   const consumption = [
@@ -276,7 +288,7 @@ export function calculateWaterBalance(
     { name: 'Distribution Losses & Consumption', value: roundTo(totalLoss, 2), pct: totalDemand > 0 ? roundTo(safeDiv(totalLoss, totalDemand) * 100, 1) : 0 },
   ];
 
-  const totalSupply = municipalSupply + recycledTotal;
+  const totalSupply = Math.min(designDemand, configuredSourceCapacity + greywaterDaily);
   const totalDischargeAndLoss = totalWastewater + irrigationLoss + totalLoss;
   const balanceDiscrepancy = Math.abs(totalSupply - totalDischargeAndLoss);
   const balanceStatus: 'BALANCED' | 'DISCREPANCY' = balanceDiscrepancy < 0.1 ? 'BALANCED' : 'DISCREPANCY';
@@ -286,11 +298,14 @@ export function calculateWaterBalance(
     consumption,
     outflows,
     totalSupply,
-    totalDemand,
-    totalWastewater,
-    totalLoss,
+    totalDemand: totalDemand,
+    designDemand,
+    totalWastewater: totalWastewater,
+    totalLoss: totalLoss,
     balanceDiscrepancy,
     balanceStatus,
+    configuredSourceCapacity,
+    sourceCapacityShortfall,
   };
 }
 
@@ -401,8 +416,12 @@ export function calculateStorage(
   const groundTank = safeMul(requiredCapacity, data.storage.groundTankPct / 100);
   const elevatedTank = safeMul(requiredCapacity, data.storage.elevatedTankPct / 100);
 
-  const totalPct = data.storage.undergroundTankPct + data.storage.roofTankPct + data.storage.groundTankPct + data.storage.elevatedTankPct;
-  const check = Math.abs(totalPct - 100) < 0.01;
+  const totalAllocated = undergroundTank + roofTank + groundTank + elevatedTank;
+  const configuredPct = data.storage.undergroundTankPct + data.storage.roofTankPct + data.storage.groundTankPct + data.storage.elevatedTankPct;
+  const existingUsableCapacity = data.storageAssets.filter((a) => a.status === 'Existing').reduce((sum, a) => sum + a.grossVolumeM3 * a.usableFractionPct / 100, 0);
+  const proposedUsableCapacity = data.storageAssets.filter((a) => a.status === 'Proposed').reduce((sum, a) => sum + a.grossVolumeM3 * a.usableFractionPct / 100, 0);
+  const totalUsableCapacity = existingUsableCapacity + proposedUsableCapacity;
+  const check = Math.abs(totalAllocated - requiredCapacity) < Math.max(0.01, requiredCapacity * 1e-6) && Math.abs(configuredPct - 100) <= 0.05;
   const statusText = check ? 'ADEQUATE FOR SELECTED DESIGN BASIS' : 'ALLOCATION MISMATCH';
 
   return {
@@ -412,7 +431,11 @@ export function calculateStorage(
     roofTank,
     groundTank,
     elevatedTank,
-    formula: 'Storage Capacity = Daily Demand (m³/day) × Duration (days) × (1 + Reserve % + Operational %)',
+    existingUsableCapacity,
+    proposedUsableCapacity,
+    totalUsableCapacity,
+    capacityShortfall: Math.max(0, requiredCapacity - totalUsableCapacity),
+    formula: 'Required storage (m³) = Design ADD (m³/day) × storage duration (days) × [1 + (reserve allowance + operational reserve) / 100]',
     substitution: `${roundTo(dailyDemandM3, 2)} × ${data.storage.storageDuration} × ${reserveFactor.toFixed(2)} = ${roundTo(requiredCapacity, 2)} m³`,
     check,
     statusText,
@@ -427,11 +450,6 @@ export function calculateTankVolume(
   data: ProjectData,
   storage: StorageResult | null
 ): TankDimensionResult[] {
-  const tanksByType: Record<string, number> = {};
-  data.tankDimensions.forEach((t) => {
-    tanksByType[t.tankType] = (tanksByType[t.tankType] || 0) + 1;
-  });
-
   return data.tankDimensions.map((tank) => {
     let grossVolume: number;
     let effectiveVolume: number;
@@ -445,16 +463,15 @@ export function calculateTankVolume(
       effectiveVolume = safeMul(safeMul(tank.length, tank.width), tank.effectiveDepth);
     }
 
-    let categoryRequired = tank.requiredCapacity;
+    // Split each tank-type allocation across all tanks of that type by effective tank volume.
+    let requiredCapacity = tank.requiredCapacity;
     if (storage) {
-      if (tank.tankType === 'Underground') categoryRequired = storage.undergroundTank;
-      else if (tank.tankType === 'Roof') categoryRequired = storage.roofTank;
-      else if (tank.tankType === 'Ground Level') categoryRequired = storage.groundTank;
-      else if (tank.tankType === 'Elevated') categoryRequired = storage.elevatedTank;
+      const typeAllocation = tank.tankType === 'Underground' ? storage.undergroundTank : tank.tankType === 'Roof' ? storage.roofTank : tank.tankType === 'Ground Level' ? storage.groundTank : storage.elevatedTank;
+      const peers = data.tankDimensions.filter((other) => other.tankType === tank.tankType);
+      const peerVolume = peers.reduce((sum, other) => sum + (other.shape === 'Cylindrical' ? Math.PI * (other.length / 2) ** 2 * other.effectiveDepth : other.length * other.width * other.effectiveDepth), 0);
+      const thisVolume = tank.shape === 'Cylindrical' ? Math.PI * (tank.length / 2) ** 2 * tank.effectiveDepth : tank.length * tank.width * tank.effectiveDepth;
+      if (tank.requiredCapacity <= 0) requiredCapacity = peerVolume > 0 ? typeAllocation * thisVolume / peerVolume : typeAllocation / Math.max(1, peers.length);
     }
-
-    const count = tanksByType[tank.tankType] || 1;
-    const requiredCapacity = tank.requiredCapacity > 0 ? tank.requiredCapacity : safeDiv(categoryRequired, count);
 
     const surplusDeficiency = effectiveVolume - requiredCapacity;
     let status: 'green' | 'amber' | 'red';
@@ -472,10 +489,10 @@ export function calculateTankVolume(
     }
 
     return {
-      tank: { ...tank, requiredCapacity: roundTo(requiredCapacity, 2) },
-      grossVolume: roundTo(grossVolume, 2),
-      effectiveVolume: roundTo(effectiveVolume, 2),
-      surplusDeficiency: roundTo(surplusDeficiency, 2),
+      tank: { ...tank, requiredCapacity },
+      grossVolume: grossVolume,
+      effectiveVolume: effectiveVolume,
+      surplusDeficiency: surplusDeficiency,
       status,
       statusText,
     };
@@ -507,23 +524,21 @@ export function calculatePumpHead(
 
   const tdhWithMargin = roundTo(safeMul(tdh, 1 + config.safetyMargin / 100), 2);
 
-  // Hydraulic Power (kW) = Q(m³/h) × H(m) × 9.81 / 3600
-  const hydraulicPower = roundTo(safeDiv(safeMul(designFlowM3h, tdhWithMargin) * 9.81, 3600), 2);
-  const motorPower = roundTo(
-    safeDiv(
-      hydraulicPower,
-      (config.pumpEfficiency / 100) * (config.motorEfficiency / 100)
-    ),
-    2
-  );
+  // Hydraulic Power: P = (Q × H × ρ × g) / (3600 × 1000) for Q in m³/h
+  // P_hydraulic (kW) = Q(m³/h) × H(m) × 9.81 / 3600
+  const hydraulicPower = safeDiv(safeMul(designFlowM3h, tdhWithMargin) * 9.81, 3600);
+  const shaftPower = safeDiv(hydraulicPower, config.pumpEfficiency / 100);
+  const electricalInputPower = safeDiv(shaftPower, config.motorEfficiency / 100);
 
   return {
     designFlow: roundTo(designFlow, 2),
     designFlowM3h,
     tdh: tdhWithMargin,
     hydraulicPower,
-    motorPower,
-    formula: 'TDH = (Static Lift + Friction + Fitting Loss + Equipment Loss + Residual Head) × (1 + Safety Margin %)',
+    motorPower: electricalInputPower,
+    shaftPower,
+    electricalInputPower,
+    formula: 'TDH = (Net Static Lift + Friction + Fitting Loss + Equipment Loss + Residual Head) × (1 + Safety Margin %)',
     substitution: `(${config.staticHead} + ${config.pipeFriction} + ${config.fittingLosses} + ${config.equipmentLosses} + ${config.requiredResidualPressure}) × ${1 + config.safetyMargin / 100} = ${roundTo(tdhWithMargin, 2)} m`,
     curveVerified: false,
   };
@@ -655,7 +670,8 @@ export function calculateWastewater(
 ): WastewaterResult | null {
   if (!domestic || !special) return null;
 
-  const indoorDemand = domestic.totalDemand + special.canteenDemand + special.workshopDemand;
+  // Treat process/workshop wastewater as a separate measured input; do not apply the sanitary return factor to it.
+  const indoorDemand = domestic.totalDemand + special.canteenDemand;
   const returnFactor = data.wastewater.sewerReturnFactor / 100;
 
   const sewerReturn = safeMul(indoorDemand, returnFactor);
@@ -706,16 +722,8 @@ export function calculateGreywaterReuse(
     };
   }
 
-  const generated =
-    data.greywater.washBasinFlow +
-    data.greywater.showerFlow +
-    data.greywater.laundryFlow +
-    data.greywater.otherSinkFlow;
-
-  const reusable = safeMul(
-    Math.min(generated, wastewater?.totalWastewater ?? 0),
-    data.greywater.treatmentEfficiency / 100
-  );
+  const generated = data.greywater.washBasinFlow + data.greywater.showerFlow + data.greywater.laundryFlow + data.greywater.otherSinkFlow;
+  const reusable = safeMul(Math.min(generated, wastewater?.sewerReturn ?? 0), data.greywater.treatmentEfficiency / 100);
 
   let reuseDemand = 0;
   const special = calculateSpecialDemand(data);
@@ -1148,6 +1156,13 @@ export function generateWarnings(
   results: AllResults
 ): EngineeringWarning[] {
   const warnings: EngineeringWarning[] = [];
+  if (!results.peakFlow) warnings.push({ id: 'PEAK-MISSING', level: 'warning', section: 'Peak Fixture Demand', message: 'Additional design information required: enter and confirm an independently calculated peak flow with its standard/table reference. No automatic fixture-unit conversion is applied.' });
+  if (results.storage && !results.storage.check) warnings.push({ id: 'STORAGE-SPLIT', level: 'critical', section: 'Storage', message: 'Tank allocation percentages must sum to 100%.' });
+  if (results.waterBalance && data.waterSources.length === 0) warnings.push({ id: 'SOURCE-MISSING', level: 'critical', section: 'Water Sources', message: 'No water sources are registered. Enter existing and proposed source yields before relying on the supply adequacy result.' });
+  if (data.occupancy.some(g => g.daysPerWeek > 7) || data.departmentDemand.departments.some(d => d.operatingDaysPerWeek > 7)) warnings.push({ id: 'OPERATING-DAYS', level: 'critical', section: 'Demand', message: 'An operating schedule exceeds 7 days/week. Correct it before using the demand calculation.' });
+  if (results.waterBalance && results.waterBalance.sourceCapacityShortfall > 0) warnings.push({ id: 'SOURCE-SHORTFALL', level: 'critical', section: 'Water Sources', message: `Registered water source and reuse capacity is below design ADD by ${roundTo(results.waterBalance.sourceCapacityShortfall / 1000, 2)} m³/day.` });
+  if (data.waterSources.some((s) => s.capacityM3Day > 0 && !s.verified)) warnings.push({ id: 'SOURCE-UNVERIFIED', level: 'warning', section: 'Water Sources', message: 'One or more source yields are unverified. Confirm sustainable yield, seasonal reliability and water quality before design approval.' });
+  if (data.greywater.enabled && results.greywater && results.greywater.greywaterGenerated > (results.wastewater?.sewerReturn ?? 0)) warnings.push({ id: 'GREY-SOURCE', level: 'warning', section: 'Greywater', message: 'Entered greywater exceeds eligible sanitary return flow. Reusable supply is capped; review source volumes.' });
 
   // Critical: No Occupancy
   if (results.totalPopulation === 0) {
@@ -1197,6 +1212,8 @@ export function generateWarnings(
         classification: 'PROTOTYPE STANDARD FACTOR',
       });
     }
+    if (data.storageAssets.length === 0) warnings.push({ id: 'TANK-INVENTORY-MISSING', level: 'warning', section: 'Storage', message: 'No existing or proposed tank inventory is recorded. Enter tank volumes and locations to check the storage gap.' });
+    else if (results.storage.capacityShortfall > 0) warnings.push({ id: 'TANK-INVENTORY-SHORTFALL', level: 'critical', section: 'Storage', message: `Usable tank inventory is below required storage by ${roundTo(results.storage.capacityShortfall, 2)} m³.` });
   }
 
   // Warning: Peak Flow Missing
@@ -1844,9 +1861,8 @@ export function calculateAll(data: ProjectData): AllResults {
     const remaining = Math.max(0, eligible - (greywater?.potableWaterReduction ?? 0));
     rainwater.nonPotableOffset = Math.min((rainwater.annualHarvested * 1000) / 365, remaining);
   }
-
-  const waterBalance = calculateWaterBalance(data, domestic, specialDemand, occupancy, rainwater, greywater);
   const add = calculateADD(data, occupancy, domestic, specialDemand);
+  const waterBalance = calculateWaterBalance(data, domestic, specialDemand, occupancy, rainwater, greywater, add);
   const mdd = calculateMDD(add, data.demandBasis.maxDayFactor);
   const peakFlow = calculateFixturePeakFlow(data);
   const storage = calculateStorage(data, add);

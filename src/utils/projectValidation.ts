@@ -7,7 +7,7 @@ export function parseProject(value: unknown): ProjectData {
   const defaults = createSampleProject();
   const optional = new Set([
     'demandBasis', 'peakDesign', 'useOccupancyRates', 'wcFlushingDemand',
-    'inletHead', 'hazenWilliamsC', 'maxVelocity', 'projectNumber',
+    'inletHead', 'hazenWilliamsC', 'maxVelocity', 'projectNumber', 'departmentDemand', 'waterSources', 'storageAssets',
     'hotWater', 'subMetering', 'wpsfFactors', 'factorOverrides', 'wpsfVersion',
   ]);
   function walk(input: unknown, template: unknown, path: string): unknown {
@@ -44,5 +44,8 @@ export function parseProject(value: unknown): ProjectData {
   }
   const result = walk(value, defaults, '') as ProjectData;
   if (!['A','B'].includes(result.domesticWater.method) || !['learning','professional'].includes(result.designMode)) throw new Error('Invalid calculation or display mode.');
+  if (result.occupancy.some(g => g.daysPerWeek > 7) || result.departmentDemand.departments.some(d => d.operatingDaysPerWeek > 7)) throw new Error('Operating days per week cannot exceed 7.');
+  if (result.waterSources.some(s => !['NWSDB','Tube Well','Rainwater Harvesting','Other'].includes(s.type) || !['Existing','Proposed'].includes(s.status))) throw new Error('Invalid water source type or status.');
+  if (result.storageAssets.some(a => !['Existing','Proposed'].includes(a.status) || !['Underground','Ground Level','Roof','Elevated'].includes(a.tankType))) throw new Error('Invalid tank type or status.');
   return result;
 }

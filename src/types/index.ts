@@ -176,6 +176,34 @@ export interface OccupancyGroup {
   classification: DesignStatus;
 }
 
+export interface DepartmentDemand {
+  id: string;
+  name: string;
+  population: number;
+  rateLPerPersonDay: number;
+  operatingDaysPerWeek: number;
+}
+
+export interface WaterSourceAsset {
+  id: string;
+  name: string;
+  type: 'NWSDB' | 'Tube Well' | 'Rainwater Harvesting' | 'Other';
+  location: string;
+  status: 'Existing' | 'Proposed';
+  capacityM3Day: number;
+  verified: boolean;
+}
+
+export interface StorageAsset {
+  id: string;
+  name: string;
+  location: string;
+  tankType: TankType;
+  status: 'Existing' | 'Proposed';
+  grossVolumeM3: number;
+  usableFractionPct: number;
+}
+
 // ----------------------------------------------------------------
 // Domestic Water — Method A (per person) vs Method B (end-use)
 // ----------------------------------------------------------------
@@ -596,6 +624,8 @@ export interface ProjectData {
 
   projectInfo: ProjectInfo;
   occupancy: OccupancyGroup[];
+  departmentDemand: { enabled: boolean; departments: DepartmentDemand[] };
+  waterSources: WaterSourceAsset[];
   domesticWater: DomesticWaterConfig;
   canteen: CanteenConfig;
   workshops: WorkshopProcess[];
@@ -605,6 +635,7 @@ export interface ProjectData {
   fixtures: Fixture[];
   storage: StorageConfig;
   tankDimensions: TankDimension[];
+  storageAssets: StorageAsset[];
   pump: PumpConfig;
   pipes: PipeDesign[];
   hotWater: HotWaterConfig;
@@ -658,10 +689,13 @@ export interface WaterBalanceResult {
   outflows: { name: string; value: number; pct: number }[];
   totalSupply: number;
   totalDemand: number;
+  designDemand: number;
   totalWastewater: number;
   totalLoss: number;
   balanceDiscrepancy: number; // Water In - (Water Out + Storage Change)
   balanceStatus: 'BALANCED' | 'DISCREPANCY';
+  configuredSourceCapacity: number;
+  sourceCapacityShortfall: number;
 }
 
 export interface ADDResult {
@@ -702,6 +736,10 @@ export interface StorageResult {
   roofTank: number;
   groundTank: number;
   elevatedTank: number;
+  existingUsableCapacity: number;
+  proposedUsableCapacity: number;
+  totalUsableCapacity: number;
+  capacityShortfall: number;
   formula: string;
   substitution: string;
   check: boolean;
@@ -723,6 +761,8 @@ export interface PumpResult {
   tdh: number; // m
   hydraulicPower: number; // kW
   motorPower: number; // kW
+  shaftPower: number; // kW
+  electricalInputPower: number; // kW
   formula: string;
   substitution: string;
   curveVerified: boolean;
