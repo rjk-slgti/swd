@@ -831,7 +831,7 @@ export function calculateFireWater(data: ProjectData): FireWaterResult | null {
     fireWaterStorage,
     formula: 'Static Fire Storage (m³) = Required Fire Flow (L/min) × Required Duration (h) × 60 / 1000',
     substitution: `${fireFlow} L/min × ${fireDuration} h × 60 min/h = ${roundTo(safeMul(safeMul(fireFlow, fireDuration), 60), 0)} L = ${roundTo(fireWaterStorage, 2)} m³`,
-    criteriaVerified: fireFlow > 0 && fireDuration > 0,
+    criteriaVerified: fireFlow > 0 && fireDuration > 0 && Boolean(data.fireWater.source.trim()) && data.fireWater.classification === 'USER OVERRIDE',
   };
 }
 
@@ -1322,6 +1322,19 @@ export function generateWarnings(
       recommendedAction: 'Consult local fire authority and enter statutory fire-flow and duration criteria.',
       source: 'Local Fire Authority Requirements',
       classification: 'AUTHORITY REQUIREMENT',
+    });
+  } else if (data.fireWater.classification !== 'USER OVERRIDE' || !data.fireWater.source.trim() || /required|verify/i.test(data.fireWater.source)) {
+    warnings.push({
+      id: 'WRN-FIR-VERIFY',
+      level: 'warning',
+      message: 'Fire-water flow and duration have not been confirmed against a project source',
+      section: 'Fire Water',
+      currentValue: `${data.fireWater.fireFlow} L/min × ${data.fireWater.fireDuration} h`,
+      referenceValue: 'Project fire strategy or authority direction',
+      whyItMatters: 'The calculated reserve depends directly on these project-specific inputs.',
+      recommendedAction: 'Enter the applicable source, review the flow and duration, and confirm the values against it.',
+      source: data.fireWater.source || 'No source entered',
+      classification: 'VERIFICATION REQUIRED',
     });
   }
 

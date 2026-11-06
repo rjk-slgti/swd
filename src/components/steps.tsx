@@ -664,6 +664,55 @@ export function StepWaterBalance() {
 
 export function StepPeakDemand() {
   const { project, setProject, results } = useProject();
+  const [licensedTableConfirmed, setLicensedTableConfirmed] = useState(false);
+  const [peakMessage, setPeakMessage] = useState('');
+  const trainingExample = project.peakDesign.source.startsWith('TRAINING-EXAMPLE:');
+
+  const importFixtureTable = async (file: File) => {
+    if (!licensedTableConfirmed) {
+      setPeakMessage('Confirm that you have permission to use this fixture table for this project before importing it.');
+      return;
+    }
+    try {
+      const contents = await file.text();
+      const rows: Array<Record<string, unknown>> = contents.trimStart().startsWith('[')
+        ? JSON.parse(contents) as Array<Record<string, unknown>>
+        : (() => {
+          const lines = contents.split(/\r?\n/).filter((line) => line.trim());
+          const splitCsv = (line: string) => {
+            const values: string[] = []; let value = ''; let quoted = false;
+            for (let index = 0; index < line.length; index += 1) {
+              const char = line[index];
+              if (char === '"' && line[index + 1] === '"' && quoted) { value += '"'; index += 1; }
+              else if (char === '"') quoted = !quoted;
+              else if (char === ',' && !quoted) { values.push(value.trim()); value = ''; }
+              else value += char;
+            }
+            values.push(value.trim());
+            return values;
+          };
+          const headers = splitCsv(lines[0]).map((header) => header.toLowerCase().replace(/[^a-z0-9]/g, ''));
+          return lines.slice(1).map((line) => Object.fromEntries(splitCsv(line).map((value, index) => [headers[index], value])));
+        })();
+      const imported: Fixture[] = rows.map((row, index) => {
+        const normalized = Object.fromEntries(Object.entries(row).map(([key, value]) => [key.toLowerCase().replace(/[^a-z0-9]/g, ''), value]));
+        const get = (...keys: string[]) => keys.map((key) => normalized[key]).find((value) => value !== undefined);
+        const type = String(get('type','fixture','name') ?? '').trim();
+        const quantity = Number(get('quantity','count'));
+        const loadingUnit = Number(get('loadingunit','lu'));
+        const fixtureUnit = Number(get('fixtureunit','fu') ?? loadingUnit);
+        const designFlow = Number(get('designflow','designflowlps','flowlps'));
+        const source = String(get('source','reference','citation') ?? '').trim();
+        if (!type || !source || ![quantity, loadingUnit, fixtureUnit, designFlow].every(Number.isFinite) || quantity < 0 || loadingUnit < 0 || fixtureUnit < 0 || designFlow < 0) throw new Error(`Invalid fixture row ${index + 1}. Required columns: type, quantity, loadingUnit, fixtureUnit, designFlow, source.`);
+        return { id: `LICENSED-${Date.now()}-${index}`, type, quantity, loadingUnit, fixtureUnit, designFlow, source: `User-licensed table: ${file.name}; ${source}` };
+      });
+      if (!imported.length) throw new Error('The fixture table contains no data rows.');
+      setProject((current) => ({ ...current, fixtures: imported, peakDesign: { ...current.peakDesign, verified: false } }));
+      setPeakMessage(`Imported ${imported.length} fixture rows. Enter and confirm the independently calculated peak flow separately.`);
+    } catch (error) {
+      setPeakMessage(error instanceof Error ? error.message : 'Could not read this fixture table.');
+    }
+  };
 
   const updateFixtureField = (id: string, field: keyof Fixture, value: string | number) => {
     setProject((p) => ({
@@ -700,7 +749,7 @@ export function StepPeakDemand() {
 
       <EduCard title="Why does this matter?" icon="why">
         <p><strong>DAILY DEMAND IS NOT PEAK FLOW.</strong> Daily demand sizes storage. Peak simultaneous flow sizes pipes and pumps.</p>
-        <p className="mt-1">Peak flow is estimated from fixture loading units using a probability-based conversion. Not all fixtures operate simultaneously — the conversion accounts for diversity.</p>
+        <p className="mt-1">Some design methods use fixture loading units with a published diversity method. This app does not create that conversion; use a source that is licensed and applicable to the project.</p>
       </EduCard>
 
       <EduCard title="How is this calculated?" icon="how">
@@ -709,11 +758,24 @@ export function StepPeakDemand() {
       </EduCard>
 
       <Card>
+        <h3 className="text-sm font-semibold text-slate-800">Choose how to resolve the peak-flow action</h3>
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <div className="rounded-lg border border-slate-200 p-3"><h4 className="text-xs font-semibold text-slate-800">Enter an external calculation</h4><p className="mt-1 text-[11px] text-slate-600">Use the flow and reference below, then confirm that they match the project method.</p></div>
+          <div className="rounded-lg border border-slate-200 p-3"><h4 className="text-xs font-semibold text-slate-800">Import a licensed fixture table</h4><p className="mt-1 text-[11px] text-slate-600">Import a CSV or JSON schedule you are licensed to use. The app will not invent a fixture-to-flow conversion.</p></div>
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3"><h4 className="text-xs font-semibold text-amber-900">Use a training example</h4><p className="mt-1 text-[11px] text-amber-900">An arbitrary 1.0 L/s example is watermarked and final reports and print are blocked while it is active.</p><button type="button" onClick={() => setProject((p) => ({ ...p, peakDesign: { flow: 1, source: 'TRAINING-EXAMPLE: arbitrary 1.0 L/s for learning only; not a design value', verified: true } }))} className="mt-2 min-h-10 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700">Use training example</button></div>
+        </div>
+        <label className="mt-4 flex items-start gap-2 text-xs text-slate-700"><input type="checkbox" checked={licensedTableConfirmed} onChange={(event) => setLicensedTableConfirmed(event.target.checked)} /><span>I confirm I have permission to use an imported fixture table for this project.</span></label>
+        <input aria-label="Import licensed fixture table CSV or JSON" type="file" accept=".csv,.json,text/csv,application/json" className="mt-2 block w-full text-xs text-slate-600 file:mr-3 file:min-h-10 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:font-semibold file:text-blue-800" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importFixtureTable(file); event.target.value = ''; }} />
+        {peakMessage && <p role="status" className="mt-2 text-xs text-blue-800">{peakMessage}</p>}
+      </Card>
+
+      <Card>
         <div className="grid md:grid-cols-2 gap-4">
           <NumberInput label="Externally calculated peak flow" unit="L/s" step={0.01} value={project.peakDesign.flow} onChange={v => setProject(p => ({ ...p, peakDesign: { ...p.peakDesign, flow: v, verified: false } }))} />
           <TextInput label="Standard / table / calculation reference" value={project.peakDesign.source} onChange={v => setProject(p => ({ ...p, peakDesign: { ...p.peakDesign, source: v, verified: false } }))} />
         </div>
         <label className="flex gap-2 text-sm mt-4"><input type="checkbox" checked={project.peakDesign.verified} onChange={e => setProject(p => ({ ...p, peakDesign: { ...p.peakDesign, verified: e.target.checked } }))} />I have checked this flow against the selected design method and fixture schedule.</label>
+        {trainingExample && <p role="alert" className="mt-3 rounded-lg border-2 border-dashed border-red-400 bg-red-50 p-3 text-sm font-bold uppercase tracking-wide text-red-800">Training example — 1.0 L/s arbitrary learning value. Not for design. Final reports and print are blocked until replaced.</p>}
         {!results.peakFlow && <p role="status" className="mt-3 text-amber-700">Additional design information required. No probable peak flow has been confirmed.</p>}
       </Card>
       {results.peakFlow && (
