@@ -34,6 +34,7 @@ import { GuidedIntake } from '@/components/GuidedIntake';
 import { Activity } from 'lucide-react';
 import { SystemSchematic } from '@/components/SystemSchematic';
 import { getStepById } from '@/data/workflowPhases';
+import { MobileResultsSheet } from '@/components/MobileResultsSheet';
 
 function AppContent() {
   const {
@@ -252,7 +253,7 @@ function AppContent() {
         )}
 
         {/* Main Calculation Canvas */}
-        <main className="flex-1 min-w-0 overflow-y-auto bg-slate-50/70 print:bg-white">
+        <main className="flex-1 min-w-0 overflow-y-auto bg-slate-50/70 pb-16 xl:pb-0 print:bg-white">
           <div className="max-w-5xl mx-auto p-4 md:p-6 lg:p-8 print:p-0 print:max-w-none">
             <div className="mb-4 flex justify-end print:hidden">
               <button onClick={() => setActiveView('intake')} className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-800 hover:bg-blue-50">Easy mode: project intake</button>
@@ -345,6 +346,8 @@ function AppContent() {
           </div>
         )}
       </div>
+
+      <MobileResultsSheet />
 
       {/* Engineering Footer */}
       <footer className="bg-white border-t border-slate-200 px-4 py-2.5 text-center print:hidden">

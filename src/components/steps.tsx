@@ -1637,22 +1637,30 @@ export function StepFireWater() {
         <p className="text-sm text-red-600 mt-1">
           Fire requirements depend on applicable fire regulations and project classification. Verify with the local fire authority.
         </p>
+        <p className="mt-2 text-xs text-red-800">There is no universal flow or duration preset here. Enter values from the approved project fire strategy or authority direction; examples from another project may not apply.</p>
       </div>
 
       <Card>
         <ToggleInput label="Enable Fire Water Module" checked={fw.enabled} onChange={(v) => update('enabled', v)} />
         {fw.enabled && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div className="mt-4 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <TextInput label="Hazard Classification" value={fw.hazardClassification} onChange={(v) => update('hazardClassification', v)} />
             <NumberInput label="Building Area" value={fw.buildingArea} onChange={(v) => update('buildingArea', v)} unit="m²" />
             <NumberInput label="Building Height" value={fw.buildingHeight} onChange={(v) => update('buildingHeight', v)} unit="m" />
-            <NumberInput label="Fire Flow" value={fw.fireFlow} onChange={(v) => update('fireFlow', v)} unit="L/min" tooltip="As required by fire authority" source={fw.source} status={fw.classification} />
-            <NumberInput label="Fire Duration" value={fw.fireDuration} onChange={(v) => update('fireDuration', v)} unit="hours" />
+            <NumberInput label="Required fire flow" value={fw.fireFlow} onChange={(v) => update('fireFlow', v)} unit="L/min" tooltip="Use the flow stated in the project fire strategy or authority direction." source={fw.source} status={fw.classification} />
+            <NumberInput label="Required supply duration" value={fw.fireDuration} onChange={(v) => update('fireDuration', v)} unit="hours" tooltip="Use the duration stated in the approved fire strategy or authority direction." />
             <div className="space-y-2">
               <ToggleInput label="Hydrant Required" checked={fw.hydrantRequired} onChange={(v) => update('hydrantRequired', v)} />
               <ToggleInput label="Hose Reel Required" checked={fw.hoseReelRequired} onChange={(v) => update('hoseReelRequired', v)} />
               <ToggleInput label="Sprinkler Required" checked={fw.sprinklerRequired} onChange={(v) => update('sprinklerRequired', v)} />
             </div>
+          </div>
+          <TextInput label="Fire criteria source or reference" value={fw.source} onChange={(v) => update('source', v)} />
+          <label className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+            <input type="checkbox" className="mt-1" checked={fw.classification === 'USER OVERRIDE'} disabled={fw.fireFlow <= 0 || fw.fireDuration <= 0 || !fw.source.trim() || /required|verify/i.test(fw.source)} onChange={(e) => update('classification', e.target.checked ? 'USER OVERRIDE' : 'VERIFICATION REQUIRED')} />
+            <span><strong>Confirm these values against the cited project or authority criteria.</strong><span className="mt-1 block text-xs">This records your confirmation; it does not certify the design. Enter a real reference above before confirming.</span></span>
+          </label>
           </div>
         )}
       </Card>
@@ -1675,7 +1683,7 @@ export function StepFireWater() {
 
           <StudentCalculationCard
             title="Student Fire Hydraulics Derivation: Dedicated Fire Suppression Storage"
-            standardRef="NFPA 13 / NFPA 14 / BS 9990 Fire Protection Code"
+            standardRef="Project fire strategy and authority criteria (to be provided)"
             governingFormula="V_fire = (Q_fire × 60 × t_duration) / 1000   |   Dedicated Static Fire Reserve"
             formulaVariables={[
               { symbol: 'Q_fire', meaning: 'Required Fire Fighting Flow Rate', unit: 'L/min', value: results.fireWater.fireFlow },
@@ -1696,7 +1704,7 @@ export function StepFireWater() {
               {
                 stepNumber: 2,
                 title: 'Emergency Pumping Attack Duration Requirement',
-                description: 'Apply statutory fire fighting duration based on fire brigade travel time and building evacuation clearance window (typically 45 to 120 minutes).',
+                description: 'Use the fire-supply duration recorded in the approved project fire strategy or authority direction. No generic duration is assumed.',
                 formula: 'Minutes = t_duration × 60 min/hour',
                 mathSubstitution: `${results.fireWater.fireDuration} hours × 60 minutes = ${results.fireWater.fireDuration * 60} minutes`,
                 intermediateResult: `${results.fireWater.fireDuration * 60}`,
@@ -1705,14 +1713,14 @@ export function StepFireWater() {
               {
                 stepNumber: 3,
                 title: 'Dedicated Volumetric Reservoir Sizing',
-                description: 'Calculate dedicated static water volume that must remain physically safeguarded 24/7/365 exclusively for fire pumps.',
+                description: 'Calculate the fire-water volume from the confirmed project flow and duration inputs. Verify how the project protects this reserve from other uses.',
                 formula: 'V_fire (m³) = (Q_fire × 60 × t_duration) / 1000',
                 mathSubstitution: `(${results.fireWater.fireFlow} L/min × 60 min/h × ${results.fireWater.fireDuration} h) / 1000`,
                 intermediateResult: results.fireWater.fireWaterStorage.toFixed(2),
                 unit: 'm³',
               },
             ]}
-            engineeringRuleOfThumb="Dedicated fire storage must NEVER be compromised by domestic consumption! In combined storage tanks, the domestic booster suction pipe must be positioned high above the dedicated fire water level to prevent domestic drawdown into the fire reserve."
+            engineeringRuleOfThumb="Confirm with the fire strategy how the required fire reserve is maintained and protected from other uses."
           />
         </>
       )}

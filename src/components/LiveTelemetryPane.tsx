@@ -29,6 +29,7 @@ interface LiveTelemetryPaneProps {
 
 function mapSectionToStepId(section: string): string {
   const s = section.toLowerCase();
+  if (s.includes('source') || s.includes('supply')) return 'step5';
   if (s.includes('occupan')) return 'step2';
   if (s.includes('special') || s.includes('canteen') || s.includes('irrigation')) return 'step4';
   if (s.includes('domestic') || s.includes('average daily') || s.includes('maximum daily') || s.includes('demand basis')) return 'step3';
@@ -764,7 +765,7 @@ export function LiveTelemetryPane({
             <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center justify-between">
               <div>
                 <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> QA Compliance Audit
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> Design issues
                 </h3>
                 <p className="text-[10px] text-slate-400 mt-0.5">
                   Click any issue to jump straight to that calculation step
@@ -795,10 +796,12 @@ export function LiveTelemetryPane({
                   const isCritical = w.level === 'critical';
 
                   return (
-                    <div
+                    <button
                       key={w.id}
+                      type="button"
                       onClick={() => onSelectStep(targetStep)}
-                      className={`p-3 rounded-xl border transition-all cursor-pointer group ${
+                      aria-label={`Open ${w.section} inputs: ${w.recommendedAction || w.message}`}
+                      className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer group ${
                         isCritical
                           ? 'bg-red-950/30 border-red-500/40 hover:border-red-400 hover:bg-red-950/50'
                           : 'bg-amber-950/20 border-amber-500/30 hover:border-amber-400 hover:bg-amber-950/40'
@@ -812,14 +815,13 @@ export function LiveTelemetryPane({
                             }`}
                           />
                           <span
-                            className={`text-[10px] font-mono font-bold uppercase px-1.5 py-0.2 rounded ${
-                              isCritical
-                                ? 'bg-red-900/60 text-red-300'
-                                : 'bg-amber-900/60 text-amber-300'
+                            className={`text-[10px] font-bold uppercase px-1.5 py-0.2 rounded ${
+                              isCritical ? 'bg-red-900/60 text-red-300' : 'bg-amber-900/60 text-amber-300'
                             }`}
                           >
-                            {w.section}
+                            {isCritical ? 'Blocking' : w.level === 'warning' ? 'Warning' : 'Info'}
                           </span>
+                          <span className="text-[10px] text-slate-400">{w.section}</span>
                         </div>
                         <span className="text-[10px] text-blue-400 flex items-center gap-0.5 font-medium group-hover:translate-x-0.5 transition-transform">
                           Fix in {targetStep} <ChevronRight className="w-3 h-3" />
@@ -842,7 +844,8 @@ export function LiveTelemetryPane({
                           <span className="flex-1">{w.recommendedAction}</span>
                         </div>
                       )}
-                    </div>
+                      {!w.recommendedAction && <p className="mt-2 text-[10px] text-emerald-300/90">Open {w.section} inputs and review the value and its source.</p>}
+                    </button>
                   );
                 })}
               </div>
