@@ -32,6 +32,8 @@ import { LiveTelemetryPane } from '@/components/LiveTelemetryPane';
 import { SmartAutoPilotModal } from '@/components/SmartAutoPilotModal';
 import { GuidedIntake } from '@/components/GuidedIntake';
 import { Activity } from 'lucide-react';
+import { SystemSchematic } from '@/components/SystemSchematic';
+import { getStepById } from '@/data/workflowPhases';
 
 function AppContent() {
   const {
@@ -54,6 +56,8 @@ function AppContent() {
   const [feedback, setFeedback] = useState('');
   const [activeView, setActiveView] = useState(() => {
     try {
+      const requestedView = window.location.hash.slice(1);
+      if (requestedView && getStepById(requestedView)) return requestedView;
       const hasActive = Boolean(localStorage.getItem('water-services-active'));
       const hasDraft = Boolean(localStorage.getItem('swd-intake-draft-v1'));
       return hasActive && !hasDraft ? 'dashboard' : 'intake';
@@ -68,6 +72,12 @@ function AppContent() {
   const [showLoadDialog, setShowLoadDialog] = useState(false);
   const [saveName, setSaveName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (activeView !== 'intake' && getStepById(activeView)) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${activeView}`);
+    }
+  }, [activeView]);
 
   const handleToggleTelemetry = () => {
     if (typeof window !== 'undefined' && window.innerWidth < 1280) {
@@ -228,6 +238,8 @@ function AppContent() {
             completionPct={results.completionPct}
             criticalWarningsCount={criticalWarnings}
             totalWarningsCount={results.warnings.length}
+            moduleCompleteness={results.moduleCompleteness}
+            warnings={results.warnings}
           />
         </aside>
 
@@ -269,10 +281,13 @@ function AppContent() {
             <WorkflowPhaseStepper
               activeStepId={activeView}
               onSelectStep={setActiveView}
+              moduleCompleteness={results.moduleCompleteness}
+              warnings={results.warnings}
             />
 
             {/* Active Step Content */}
             <div className="min-h-[500px]">
+              {activeView === 'dashboard' && <SystemSchematic onSelectStep={setActiveView} />}
               {renderView()}
             </div>
 

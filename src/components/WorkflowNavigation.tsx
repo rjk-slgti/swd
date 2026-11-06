@@ -27,6 +27,54 @@ import {
   getAdjacentSteps,
 } from '@/data/workflowPhases';
 import { ProgressRing } from '@/components/ui';
+import type { EngineeringWarning, ModuleCompleteness } from '@/types';
+
+type StepStatus = 'Not started' | 'In progress' | 'Needs attention' | 'Complete';
+
+const stepCompletionKey: Record<string, keyof ModuleCompleteness> = {
+  step1: 'projectInfo', standards: 'standards', step2: 'occupancy',
+  step3: 'dailyDemand', step4: 'dailyDemand', step5: 'dailyDemand',
+  step6: 'peakDemand', step7: 'storage', step8: 'pumping', pipes: 'pipework',
+  hotwater: 'hotWater', step9: 'wastewater', step10: 'rainwater',
+  step11: 'greywater', step12: 'fireWater', step13: 'sustainability', step15: 'reports',
+};
+
+const stepWarningSections: Record<string, string[]> = {
+  step2: ['occupancy', 'population'], step3: ['demand'], step4: ['demand'],
+  step5: ['water balance', 'water sources'], step6: ['peak fixture demand'],
+  step7: ['storage', 'tank'], step8: ['pump'], pipes: ['pipework', 'pipe'],
+  step9: ['wastewater'], step10: ['rainwater'], step11: ['greywater'],
+  step12: ['fire'], step14: ['review', 'validation'],
+};
+
+function getStepStatus(
+  stepId: string,
+  activeStepId: string,
+  moduleCompleteness: ModuleCompleteness,
+  warnings: EngineeringWarning[],
+): StepStatus {
+  const sections = stepWarningSections[stepId] ?? [];
+  if (warnings.some((warning) => sections.some((section) => warning.section.toLowerCase().includes(section)))) {
+    return 'Needs attention';
+  }
+  if (stepId === activeStepId) return 'In progress';
+  const key = stepCompletionKey[stepId];
+  const completion = key ? moduleCompleteness[key] : 0;
+  if (completion >= 100) return 'Complete';
+  if (completion > 0) return 'In progress';
+  return 'Not started';
+}
+
+const statusStyles: Record<StepStatus, string> = {
+  'Not started': 'bg-slate-300',
+  'In progress': 'bg-blue-500',
+  'Needs attention': 'bg-amber-500',
+  Complete: 'bg-emerald-500',
+};
+
+function StepStatusDot({ status }: { status: StepStatus }) {
+  return <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${statusStyles[status]}`} title={status} aria-label={status} />;
+}
 
 // ============================================================
 // TOP APPLICATION HEADER
@@ -268,9 +316,11 @@ export function AppHeader({
 interface WorkflowPhaseStepperProps {
   activeStepId: string;
   onSelectStep: (stepId: string) => void;
+  moduleCompleteness: ModuleCompleteness;
+  warnings: EngineeringWarning[];
 }
 
-export function WorkflowPhaseStepper({ activeStepId, onSelectStep }: WorkflowPhaseStepperProps) {
+export function WorkflowPhaseStepper({ activeStepId, onSelectStep, moduleCompleteness, warnings }: WorkflowPhaseStepperProps) {
   const currentPhase = getPhaseForStep(activeStepId) || WORKFLOW_PHASES[0];
 
   return (
@@ -285,6 +335,7 @@ export function WorkflowPhaseStepper({ activeStepId, onSelectStep }: WorkflowPha
           return (
             <button
               key={phase.id}
+              type="button"
               onClick={() => {
                 // If switching to this phase, select its first step
                 if (!isPhaseActive) {
@@ -315,7 +366,7 @@ export function WorkflowPhaseStepper({ activeStepId, onSelectStep }: WorkflowPha
                   />
                 </div>
                 <span className="text-[10px] text-slate-400 font-medium">
-                  {stepCount} steps
+                  {stepCount} items
                 </span>
               </div>
 
@@ -349,7 +400,10 @@ export function WorkflowPhaseStepper({ activeStepId, onSelectStep }: WorkflowPha
             return (
               <button
                 key={st.id}
+                type="button"
                 onClick={() => onSelectStep(st.id)}
+                aria-current={isStepActive ? 'step' : undefined}
+                title={`${st.label}: ${getStepStatus(st.id, activeStepId, moduleCompleteness, warnings)}`}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all border ${
                   isStepActive
                     ? 'bg-white border-blue-400/90 text-blue-700 shadow-2xs font-semibold ring-1 ring-blue-500/20'
@@ -367,12 +421,18 @@ export function WorkflowPhaseStepper({ activeStepId, onSelectStep }: WorkflowPha
                     {st.stepNumber}
                   </span>
                 )}
+                <StepStatusDot status={getStepStatus(st.id, activeStepId, moduleCompleteness, warnings)} />
                 <StepIcon className={`w-3.5 h-3.5 ${isStepActive ? 'text-blue-600' : 'text-slate-400'}`} />
                 <span>{st.shortLabel}</span>
               </button>
             );
           })}
         </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 px-4 py-2 text-[10px] text-slate-500" aria-label="Step status legend">
+        {(['Not started', 'In progress', 'Needs attention', 'Complete'] as StepStatus[]).map((status) => (
+          <span key={status} className="inline-flex items-center gap-1.5"><StepStatusDot status={status} />{status}</span>
+        ))}
       </div>
     </div>
   );
@@ -388,6 +448,8 @@ interface WorkflowSidebarProps {
   completionPct: number;
   criticalWarningsCount: number;
   totalWarningsCount: number;
+  moduleCompleteness: ModuleCompleteness;
+  warnings: EngineeringWarning[];
 }
 
 export function WorkflowSidebar({
@@ -396,6 +458,8 @@ export function WorkflowSidebar({
   completionPct,
   criticalWarningsCount,
   totalWarningsCount,
+  moduleCompleteness,
+  warnings,
 }: WorkflowSidebarProps) {
   const currentPhase = getPhaseForStep(activeStepId);
   const [searchQuery, setSearchQuery] = useState('');
@@ -463,6 +527,7 @@ export function WorkflowSidebar({
               return (
                 <button
                   key={st.id}
+                  type="button"
                   onClick={() => onSelectStep(st.id)}
                   className={`w-full text-left p-2 rounded-lg text-xs flex items-center gap-2.5 transition-colors ${
                     isActive
@@ -474,9 +539,10 @@ export function WorkflowSidebar({
                   <div className="truncate flex-1">
                     <div className="truncate">{st.label}</div>
                     <div className="text-[10px] text-slate-400 font-normal truncate">
-                      {st.description}
+                        {st.description}
                     </div>
                   </div>
+                  <StepStatusDot status={getStepStatus(st.id, activeStepId, moduleCompleteness, warnings)} />
                 </button>
               );
             })}
@@ -537,8 +603,9 @@ export function WorkflowSidebar({
                       const StepIcon = st.icon;
 
                       return (
-                        <button
+                  <button
                           key={st.id}
+                    type="button"
                           onClick={() => onSelectStep(st.id)}
                           className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-2 transition-all ${
                             isActive
@@ -557,6 +624,8 @@ export function WorkflowSidebar({
                           )}
                           <StepIcon className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
                           <span className="truncate flex-1">{st.shortLabel}</span>
+                          <span className="sr-only">{getStepStatus(st.id, activeStepId, moduleCompleteness, warnings)}</span>
+                          <StepStatusDot status={getStepStatus(st.id, activeStepId, moduleCompleteness, warnings)} />
                         </button>
                       );
                     })}
