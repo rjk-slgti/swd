@@ -1913,9 +1913,9 @@ export function StepDesignReview() {
         </Card>
         <Card className="text-center">
           <div className={`text-2xl font-bold ${results.overallStatus === 'PASS' ? 'text-green-600' : results.overallStatus === 'REVIEW' ? 'text-amber-600' : 'text-red-600'}`}>
-            {results.overallStatus}
+            {results.overallStatus === 'PASS' ? 'No flagged checks' : results.overallStatus === 'REVIEW' ? 'Review needed' : 'Inputs incomplete'}
           </div>
-          <div className="text-sm text-slate-500">Engineering Status</div>
+          <div className="text-sm text-slate-500">Automated preliminary review</div>
         </Card>
         <Card className="text-center">
           <div className="text-2xl font-bold text-slate-700">{results.warnings.length}</div>
@@ -1923,12 +1923,12 @@ export function StepDesignReview() {
         </Card>
       </div>
 
-      {/* 18-POINT SUBSYSTEM VALIDATION MATRIX */}
+      {/* Automated project input checks */}
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <div>
-            <h3 className="text-sm font-semibold text-slate-800">18-Point System Validation Matrix</h3>
-            <p className="text-xs text-slate-500">Rigorous independent criteria verification across all hydraulic and storage subsystems</p>
+            <h3 className="text-sm font-semibold text-slate-800">Project input checks</h3>
+            <p className="text-xs text-slate-500">Automated checks help identify items to review. They do not represent independent engineering verification or certify a design.</p>
           </div>
           <div className="flex items-center gap-2">
             <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${

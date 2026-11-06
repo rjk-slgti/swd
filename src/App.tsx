@@ -35,8 +35,10 @@ import { Activity } from 'lucide-react';
 import { SystemSchematic } from '@/components/SystemSchematic';
 import { getStepById } from '@/data/workflowPhases';
 import { MobileResultsSheet } from '@/components/MobileResultsSheet';
+import { I18nProvider, useI18n } from '@/i18n/I18nContext';
 
 function AppContent() {
+  const { language, setLanguage } = useI18n();
   const {
     project,
     results,
@@ -195,7 +197,7 @@ function AppContent() {
   const criticalWarnings = results.warnings.filter((w) => w.level === 'critical').length;
 
   if (activeView === 'intake') {
-    return <GuidedIntake onComplete={() => setActiveView('dashboard')} onEngineer={() => setActiveView('dashboard')} />;
+    return <GuidedIntake onComplete={() => setActiveView('dashboard')} onEngineer={() => setActiveView('dashboard')} onSample={() => { loadSampleProject(); setActiveView('dashboard'); }} />;
   }
 
   return (
@@ -206,6 +208,8 @@ function AppContent() {
         designStage={project.projectInfo.designStage}
         location={project.projectInfo.location}
         studentMode={studentMode}
+        language={language}
+        onLanguageChange={setLanguage}
         onToggleStudentMode={toggleStudentMode}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         sidebarOpen={sidebarOpen}
@@ -249,7 +253,9 @@ function AppContent() {
 
         {/* Overlay Backdrop for Mobile Drawer */}
         {sidebarOpen && (
-          <div
+          <button
+            type="button"
+            aria-label="Close navigation menu"
             className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs z-20 lg:hidden"
             onClick={() => setSidebarOpen(false)}
           />
@@ -335,7 +341,9 @@ function AppContent() {
         {/* Mobile / Tablet Drawer for Telemetry */}
         {mobileTelemetryOpen && (
           <div className="xl:hidden fixed inset-0 z-50 flex justify-end">
-            <div
+            <button
+              type="button"
+              aria-label="Close live results panel"
               className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
               onClick={() => setMobileTelemetryOpen(false)}
             />
@@ -366,14 +374,19 @@ function AppContent() {
       {/* SAVE DIALOG */}
       {showSaveDialog && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="save-dialog-title"
+          tabIndex={-1}
           className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowSaveDialog(false); }}
           onClick={() => setShowSaveDialog(false)}
         >
           <div
             className="bg-white rounded-xl p-6 max-w-md w-full shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-base font-bold text-slate-800 mb-3">Save Project</h3>
+            <h3 id="save-dialog-title" className="text-base font-bold text-slate-800 mb-3">Save Project</h3>
             <p className="text-xs text-slate-500 mb-3">
               Enter a name to save this design state locally in your browser storage.
             </p>
@@ -406,14 +419,19 @@ function AppContent() {
       {/* LOAD DIALOG */}
       {showLoadDialog && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="load-dialog-title"
+          tabIndex={-1}
           className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowLoadDialog(false); }}
           onClick={() => setShowLoadDialog(false)}
         >
           <div
             className="bg-white rounded-xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-base font-bold text-slate-800 mb-3">Saved Projects</h3>
+            <h3 id="load-dialog-title" className="text-base font-bold text-slate-800 mb-3">Saved Projects</h3>
             {savedProjects.length === 0 ? (
               <p className="text-sm text-slate-500 py-6 text-center">
                 No saved projects found. Use &quot;Save&quot; to store your current project.
@@ -482,9 +500,9 @@ function AppContent() {
 
 function App() {
   return (
-    <ProjectProvider>
-      <AppContent />
-    </ProjectProvider>
+    <I18nProvider>
+      <ProjectProvider><AppContent /></ProjectProvider>
+    </I18nProvider>
   );
 }
 

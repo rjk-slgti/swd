@@ -784,9 +784,9 @@ export function LiveTelemetryPane({
             {results.warnings.length === 0 ? (
               <div className="p-6 text-center bg-slate-950/40 rounded-xl border border-slate-800">
                 <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-                <h4 className="text-xs font-bold text-white">All Engineering Rules Verified</h4>
+                <h4 className="text-xs font-bold text-white">No open flagged checks</h4>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  No critical violations or sizing discrepancies detected.
+                  This automated review does not certify the design. Independent professional review is still required.
                 </p>
               </div>
             ) : (

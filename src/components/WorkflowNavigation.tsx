@@ -28,8 +28,12 @@ import {
 } from '@/data/workflowPhases';
 import { ProgressRing } from '@/components/ui';
 import type { EngineeringWarning, ModuleCompleteness } from '@/types';
+import type { Language } from '@/i18n/I18nContext';
+import { useI18n } from '@/i18n/I18nContext';
 
 type StepStatus = 'Not started' | 'In progress' | 'Needs attention' | 'Complete';
+const phaseTranslationKeys = ['phase_project','phase_people','phase_sources','phase_storage','phase_review'] as const;
+const getPhaseTranslationKey = (number: number) => phaseTranslationKeys[number - 1] ?? 'phase_project';
 
 const stepCompletionKey: Record<string, keyof ModuleCompleteness> = {
   step1: 'projectInfo', standards: 'standards', step2: 'occupancy',
@@ -99,6 +103,8 @@ interface AppHeaderProps {
   onSample: () => void;
   fileInputRef: React.RefObject<HTMLInputElement>;
   handleImportFile: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  language: Language;
+  onLanguageChange: (language: Language) => void;
 }
 
 export function AppHeader({
@@ -119,6 +125,8 @@ export function AppHeader({
   onSample,
   fileInputRef,
   handleImportFile,
+  language,
+  onLanguageChange,
 }: AppHeaderProps) {
   const [actionsOpen, setActionsOpen] = useState(false);
 
@@ -169,6 +177,10 @@ export function AppHeader({
 
       {/* Control Actions & Student Mode Toggle */}
       <div className="flex items-center gap-2">
+        <label className="sr-only" htmlFor="app-language">Language</label>
+        <select id="app-language" aria-label="Language" value={language} onChange={(e) => onLanguageChange(e.target.value as Language)} className="min-h-10 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+          <option value="en">English</option><option value="ta">தமிழ்</option><option value="si">සිංහල</option>
+        </select>
         {/* Student Learning Mode Switch */}
         <button
           type="button"
@@ -321,7 +333,10 @@ interface WorkflowPhaseStepperProps {
 }
 
 export function WorkflowPhaseStepper({ activeStepId, onSelectStep, moduleCompleteness, warnings }: WorkflowPhaseStepperProps) {
+  const { t } = useI18n();
   const currentPhase = getPhaseForStep(activeStepId) || WORKFLOW_PHASES[0];
+  const phaseLabel = (number: number, fallback: string) => t(getPhaseTranslationKey(number)) || fallback;
+  const statusLabel = (status: StepStatus) => t(({ 'Not started':'not_started', 'In progress':'in_progress', 'Needs attention':'needs_attention', Complete:'complete' } as const)[status]);
 
   return (
     <div className="bg-white border border-slate-200/90 rounded-xl shadow-2xs mb-6 overflow-hidden">
@@ -342,7 +357,8 @@ export function WorkflowPhaseStepper({ activeStepId, onSelectStep, moduleComplet
                   onSelectStep(phase.steps[0].id);
                 }
               }}
-              className={`p-3 text-left transition-all relative flex flex-col justify-between ${
+              aria-current={isPhaseActive ? 'step' : undefined}
+              className={`min-h-[76px] p-3 text-left transition-all relative flex flex-col justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600 ${
                 isPhaseActive
                   ? 'bg-blue-50/50'
                   : 'hover:bg-slate-50/80 bg-white text-slate-600'
@@ -375,7 +391,7 @@ export function WorkflowPhaseStepper({ activeStepId, onSelectStep, moduleComplet
                   isPhaseActive ? 'text-blue-900' : 'text-slate-700'
                 }`}
               >
-                {phase.shortTitle}
+                {phaseLabel(phase.number, phase.shortTitle)}
               </div>
 
               {/* Active Bottom Indicator */}
@@ -403,8 +419,8 @@ export function WorkflowPhaseStepper({ activeStepId, onSelectStep, moduleComplet
                 type="button"
                 onClick={() => onSelectStep(st.id)}
                 aria-current={isStepActive ? 'step' : undefined}
-                title={`${st.label}: ${getStepStatus(st.id, activeStepId, moduleCompleteness, warnings)}`}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all border ${
+                title={`${st.label}: ${statusLabel(getStepStatus(st.id, activeStepId, moduleCompleteness, warnings))}`}
+                className={`flex min-h-10 items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1 ${
                   isStepActive
                     ? 'bg-white border-blue-400/90 text-blue-700 shadow-2xs font-semibold ring-1 ring-blue-500/20'
                     : 'bg-white/80 border-slate-200/80 text-slate-600 hover:bg-white hover:text-slate-900 hover:border-slate-300'
@@ -431,7 +447,7 @@ export function WorkflowPhaseStepper({ activeStepId, onSelectStep, moduleComplet
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 px-4 py-2 text-[10px] text-slate-500" aria-label="Step status legend">
         {(['Not started', 'In progress', 'Needs attention', 'Complete'] as StepStatus[]).map((status) => (
-          <span key={status} className="inline-flex items-center gap-1.5"><StepStatusDot status={status} />{status}</span>
+          <span key={status} className="inline-flex items-center gap-1.5"><StepStatusDot status={status} />{statusLabel(status)}</span>
         ))}
       </div>
     </div>
@@ -461,6 +477,7 @@ export function WorkflowSidebar({
   moduleCompleteness,
   warnings,
 }: WorkflowSidebarProps) {
+  const { t } = useI18n();
   const currentPhase = getPhaseForStep(activeStepId);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedPhases, setExpandedPhases] = useState<Record<string, boolean>>(() => {
@@ -567,7 +584,8 @@ export function WorkflowSidebar({
                 <button
                   type="button"
                   onClick={() => togglePhase(phase.id)}
-                  className={`w-full text-left p-2.5 flex items-center justify-between gap-2 select-none transition-colors ${
+                  aria-expanded={isExpanded}
+                  className={`w-full min-h-11 text-left p-2.5 flex items-center justify-between gap-2 select-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600 ${
                     isPhaseActive ? 'bg-blue-50/40 text-blue-950 font-bold' : 'hover:bg-slate-50 text-slate-800'
                   }`}
                 >
@@ -580,7 +598,7 @@ export function WorkflowSidebar({
                       {phase.number}
                     </span>
                     <PhaseIcon className={`w-4 h-4 flex-shrink-0 ${isPhaseActive ? 'text-blue-600' : 'text-slate-400'}`} />
-                    <span className="text-xs truncate">{phase.shortTitle}</span>
+                    <span className="text-xs truncate">{t(getPhaseTranslationKey(phase.number))}</span>
                   </div>
 
                   <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -607,7 +625,7 @@ export function WorkflowSidebar({
                           key={st.id}
                     type="button"
                           onClick={() => onSelectStep(st.id)}
-                          className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-2 transition-all ${
+                          className={`w-full min-h-10 text-left px-2.5 py-2 rounded-lg text-xs flex items-center gap-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
                             isActive
                               ? 'bg-blue-600 text-white font-semibold shadow-2xs'
                               : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900'
@@ -658,7 +676,7 @@ export function WorkflowSidebar({
             </span>
           ) : (
             <span className="flex items-center gap-1 font-medium text-emerald-600 text-[11px]">
-              <CheckCircle2 className="w-3.5 h-3.5" /> All standards satisfied
+              <CheckCircle2 className="w-3.5 h-3.5" /> No open flagged checks
             </span>
           )}
         </div>
