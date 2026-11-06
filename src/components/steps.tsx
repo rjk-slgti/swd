@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 42395)
-Total output lines: 2554
-
 import { useState } from 'react';
 import { useProject } from '@/context/ProjectContext';
 import {
@@ -198,6 +195,7 @@ export function StepOccupancy() {
         title="Student Derivation: Occupancy Water Demand Accumulation"
         standardRef="BS 6465-1 / CIBSE Guide G / SLS 1373"
         governingFormula="Q_group = N_i × q_i × (d_i / 7)   |   Q_total = Σ Q_group"
+
         formulaVariables={[
           { symbol: 'N_total', meaning: 'Total Facility Population', unit: 'persons', value: results.totalPopulation },
           { symbol: 'Q_total', meaning: 'Combined Occupancy Demand', unit: 'm³/day', value: (results.occupancy.reduce((s, r) => s + r.dailyDemand, 0) / 1000).toFixed(2) },
@@ -398,6 +396,7 @@ export function StepOccupancy() {
       {/* WARNINGS SUMMARY */}
       {results.warnings.length > 0 && (
         <Card>
+
           <h3 className="text-sm font-semibold text-slate-700 mb-3">Active Warnings ({results.warnings.length})</h3>
           <div className="space-y-2">
             {results.warnings.slice(0, 5).map((w) => (
@@ -598,6 +597,7 @@ export function StepStandards() {
                 placeholder="e.g., Client specific brief, local meteorological measurement, metered benchmark"
               />
               <TextInput
+
                 label="Applicable Reference / Standard"
                 value={overrideRef}
                 onChange={(v) => setOverrideRef(v)}
@@ -633,4 +633,23 @@ export function StepStandards() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
