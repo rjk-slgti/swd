@@ -655,6 +655,65 @@ export interface ProjectData {
 }
 
 // ----------------------------------------------------------------
+// Plain-Language Intake Wizard Answers (R2 a–i)
+// ----------------------------------------------------------------
+
+export type IntakeBuildingType =
+  | 'house'
+  | 'apartment'
+  | 'hotel'
+  | 'office'
+  | 'hospital'
+  | 'school'
+  | 'mall'
+  | 'factory'
+  | 'mixed';
+
+export type IntakeHotWaterType = 'none' | 'central' | 'per-unit' | 'solar' | 'heat-pump';
+
+export type IntakeWaterSource = 'mains' | 'well' | 'tank-fed' | 'unknown';
+
+export type IntakePressureQuality = 'good' | 'weak' | 'unknown';
+
+export type IntakeGoal = 'lowest-cost' | 'reliability' | 'water-saving' | 'green-rating';
+
+export type IntakeUnitSystem = 'metric' | 'imperial';
+
+export type IntakeDesignStandard = 'BS EN 806' | 'BS 8558' | 'CIBSE' | 'IPC' | 'ASPE' | 'NWSDB';
+
+export interface IntakeWaterPoints {
+  bathrooms: number;
+  kitchens: number;
+  laundry: number;
+  pool: number;
+  garden: number;
+  cooling: number;
+  fireTank: number;
+}
+
+export interface IntakeAnswers {
+  projectName: string;
+  location: string;
+  country: string;
+  filledBy: string;
+  buildingType: IntakeBuildingType;
+  floors: number;
+  hasBasement: boolean;
+  hasRoofTank: boolean;
+  unitsPerFloor: number;
+  floorHeight: number;
+  occupantCount: number | null;
+  occupantAutoEstimated: boolean;
+  waterPoints: IntakeWaterPoints;
+  hotWaterType: IntakeHotWaterType;
+  waterSource: IntakeWaterSource;
+  pressureQuality: IntakePressureQuality;
+  goals: IntakeGoal[];
+  unitSystem: IntakeUnitSystem;
+  designStandard: IntakeDesignStandard;
+}
+
+// ----------------------------------------------------------------
 // Calculation Results — comprehensive output models
 // ----------------------------------------------------------------
 

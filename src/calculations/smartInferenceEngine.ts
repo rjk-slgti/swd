@@ -147,14 +147,18 @@ export function inferProjectFromBuildingDetails(input: SmartInferenceInput): Pro
 
   // 7. LANDSCAPE IRRIGATION
   const totalIrrigationLpd = Math.round(quantity * archetype.irrigationLpdPerUnit);
+  const landscapeAreaM2 = Math.round(footprintAreaM2 * 0.4);
   const irrigation = {
     ...base.irrigation,
     enabled: totalIrrigationLpd > 0,
-    lawnArea: Math.round(footprintAreaM2 * 0.2),
-    shrubArea: Math.round(footprintAreaM2 * 0.1),
-    treeCount: Math.max(4, Math.round(floors * 2)),
-    dripArea: Math.round(footprintAreaM2 * 0.1),
-    rateLitersPerM2: grade === 'eco' ? 2.5 : 3.5,
+    landscapeArea: landscapeAreaM2,
+    plantCategory: isResidential ? 'Ornamental garden + lawn' : 'Tropical shrubs + lawn',
+    irrigationSystem: grade === 'eco' ? 'Drip network' : 'Drip & micro-sprinkler',
+    irrigationRate: grade === 'eco' ? 2.5 : 3.5,
+    irrigationDays: isResidential ? 5 : 4,
+    seasonalAdjustment: 10,
+    rainfallContribution: 0,
+    recycledWaterContribution: 0,
   };
 
   // 8. SANITARY FIXTURES CALIBRATION (BS EN 806 / CIPHE Code Sizing)
@@ -178,6 +182,11 @@ export function inferProjectFromBuildingDetails(input: SmartInferenceInput): Pro
     else if (f.id === 'FX-12' && isResidential) qty = Math.max(1, Math.round(quantity * 0.8)); // Washing machine
     return { ...f, quantity: qty };
   });
+
+  // 8b. PEAK FLOW ESTIMATION from loading units (simplified Hunter-type curve)
+  // Q_peak (L/s) ≈ 0.071 × √(total_loading_units) + 0.2 (approximate BS EN 806-3 diversity)
+  const totalLoadingUnits = fixtures.reduce((sum, f) => sum + f.quantity * f.loadingUnit, 0);
+  const estimatedPeakFlowLps = Number(Math.max(0.5, 0.071 * Math.sqrt(totalLoadingUnits) + 0.2).toFixed(2));
 
   // 9. STORAGE TANK SIZING & DURATION
   const storageDurationDays = archetype.storageDurationDays * (grade === 'luxury' ? 1.25 : grade === 'eco' ? 0.9 : 1.0);
@@ -243,6 +252,7 @@ export function inferProjectFromBuildingDetails(input: SmartInferenceInput): Pro
 
   const pump = {
     ...base.pump,
+    requiredFlow: estimatedPeakFlowLps,
     staticHead: staticHeadM,
     suctionHead: 0, // Flooded suction from break tank
     deliveryHead: staticHeadM,
@@ -257,17 +267,21 @@ export function inferProjectFromBuildingDetails(input: SmartInferenceInput): Pro
     source: `Smart Inferred for ${floors}-story building (${staticHeadM}m static + 15m residual)`,
   };
 
-  // 11. HOT WATER SYSTEM
+  // 11. HOT WATER SYSTEM — maps to HotWaterConfig percentage-based fields
   const hotWaterLpd = Math.round(totalOccupants * archetype.hotWaterLpdPerPerson * gradeMultiplier);
+  const hotWaterEnabled = hotWaterLpd > 0;
+  const isResidentialType = isResidential;
   const hotWater = {
     ...base.hotWater,
-    enabled: hotWaterLpd > 0,
-    dailyHotWaterDemandL: hotWaterLpd,
-    storageCapacityL: Math.max(100, Math.round(hotWaterLpd * 0.8)),
+    enabled: hotWaterEnabled,
+    showerHotWaterPct: isResidentialType ? 45 : 30,
+    washbasinHotWaterPct: 20,
+    kitchenHotWaterPct: 50,
+    hostelHotWaterPct: isResidentialType ? 40 : 0,
+    coldWaterTempC: 25,
     storageTempC: 60, // Legionella safety pasteurization standard
-    deliveryTempC: 45,
+    deliveryTempC: 43,
     heatingTimeHours: 2.5,
-    heaterPowerKW: Math.max(3, Number(((hotWaterLpd * 4.184 * 45) / (3600 * 2.5)).toFixed(1))),
     source: 'CIBSE Guide G Table 2.4 Hot Water Allocation',
   };
 
@@ -283,10 +297,24 @@ export function inferProjectFromBuildingDetails(input: SmartInferenceInput): Pro
     collectionEfficiency: 85,
   };
 
+  // Estimate greywater source flows from occupancy demand split
+  const dayUserDemandL = primaryUsersCount * basePerCapita * (isResidential ? 0 : 5 / 7);
+  const residentialDemandL = isResidential ? totalOccupants * basePerCapita : supportStaffCount * 40 * 6 / 7;
+  const greywaterWashBasinFlow = Math.round(dayUserDemandL * 0.15 + residentialDemandL * 0.10);
+  const greywaterShowerFlow = Math.round(residentialDemandL * 0.35 + (isResidential ? 0 : dayUserDemandL * 0.05));
+  const greywaterLaundryFlow = isResidential ? Math.round(residentialDemandL * 0.15) : 0;
+  const greywaterOtherSinkFlow = Math.round(dayUserDemandL * 0.05);
+  const wcFlushingDemandL = Math.round(totalOccupants * basePerCapita * (grade === 'eco' ? 0.25 : 0.35) * (isResidential ? 1 : 5 / 7));
+
   const greywater = {
     ...base.greywater,
     enabled: enableSustainability && (showerCount > 0 || isResidential),
+    washBasinFlow: greywaterWashBasinFlow,
+    showerFlow: greywaterShowerFlow,
+    laundryFlow: greywaterLaundryFlow,
+    otherSinkFlow: greywaterOtherSinkFlow,
     treatmentEfficiency: 85,
+    wcFlushingDemand: wcFlushingDemandL,
     reuseForWCFlushing: true,
     reuseForIrrigation: true,
     reuseForCleaning: false,
@@ -295,17 +323,38 @@ export function inferProjectFromBuildingDetails(input: SmartInferenceInput): Pro
   // 13. FIRE WATER STORAGE (Hazard category allocation)
   const fireWater = {
     ...base.fireWater,
-    fireReserveM3: archetype.fireReserveM3,
+    enabled: true,
+    hazardClassification: `${archetype.fireHazardCategory} Hazard — ${archetype.name}`,
+    buildingArea: totalFloorAreaM2,
+    buildingHeight: Number((floors * 3.5).toFixed(1)),
+    hydrantRequired: archetype.fireHazardCategory === 'High',
+    hoseReelRequired: true,
+    sprinklerRequired: archetype.fireHazardCategory === 'High',
     fireFlow: archetype.fireFlowLps * 60, // L/min
-    fireDuration: 120, // 2-hour fire endurance
-    criteriaVerified: true,
+    fireDuration: 2, // 2-hour fire endurance (hours)
+    source: `Smart Inferred: ${archetype.fireHazardCategory} hazard, ${archetype.fireFlowLps} L/s for 2h`,
+    classification: 'AUTHORITY REQUIREMENT' as const,
   };
 
   // Return complete validated ProjectData
+  const peakDesign = {
+    flow: estimatedPeakFlowLps,
+    source: `Smart Inferred: estimated from ${totalLoadingUnits} loading units (simplified BS EN 806-3 diversity)`,
+    verified: true,
+  };
+
+  // Estimate pipe flows from peak flow
+  const pipes = base.pipes.map((pipe) => ({
+    ...pipe,
+    flow: estimatedPeakFlowLps,
+    elevationDifference: staticHeadM,
+  }));
+
   return {
     ...base,
     projectInfo,
     demandBasis,
+    peakDesign,
     occupancy,
     domesticWater,
     canteen,
@@ -315,6 +364,7 @@ export function inferProjectFromBuildingDetails(input: SmartInferenceInput): Pro
     storage,
     tankDimensions,
     pump,
+    pipes,
     hotWater,
     rainwater,
     greywater,
