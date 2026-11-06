@@ -30,6 +30,7 @@ import {
 } from '@/components/WorkflowNavigation';
 import { LiveTelemetryPane } from '@/components/LiveTelemetryPane';
 import { SmartAutoPilotModal } from '@/components/SmartAutoPilotModal';
+import { GuidedIntake } from '@/components/GuidedIntake';
 import { Activity } from 'lucide-react';
 
 function AppContent() {
@@ -51,7 +52,14 @@ function AppContent() {
   } = useProject();
 
   const [feedback, setFeedback] = useState('');
-  const [activeView, setActiveView] = useState('dashboard');
+  const [activeView, setActiveView] = useState(() => {
+    try {
+      const hasActive = Boolean(localStorage.getItem('water-services-active'));
+      const hasDraft = Boolean(localStorage.getItem('swd-intake-draft-v1'));
+      return hasActive && !hasDraft ? 'dashboard' : 'intake';
+    }
+    catch { return 'intake'; }
+  });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [telemetryOpen, setTelemetryOpen] = useState(true);
   const [mobileTelemetryOpen, setMobileTelemetryOpen] = useState(false);
@@ -172,6 +180,10 @@ function AppContent() {
 
   const criticalWarnings = results.warnings.filter((w) => w.level === 'critical').length;
 
+  if (activeView === 'intake') {
+    return <GuidedIntake onComplete={() => setActiveView('dashboard')} onEngineer={() => setActiveView('dashboard')} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
       {/* Modern Application Header */}
@@ -230,6 +242,9 @@ function AppContent() {
         {/* Main Calculation Canvas */}
         <main className="flex-1 min-w-0 overflow-y-auto bg-slate-50/70 print:bg-white">
           <div className="max-w-5xl mx-auto p-4 md:p-6 lg:p-8 print:p-0 print:max-w-none">
+            <div className="mb-4 flex justify-end print:hidden">
+              <button onClick={() => setActiveView('intake')} className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-800 hover:bg-blue-50">Easy mode: project intake</button>
+            </div>
             {storageError && (
               <div role="alert" className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3.5 text-sm text-red-800 shadow-2xs">
                 {storageError}
@@ -449,3 +464,4 @@ function App() {
 }
 
 export default App;
+
