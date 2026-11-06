@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useProject } from '@/context/ProjectContext';
 import {
   SectionHeader,
@@ -32,6 +32,7 @@ import {
   Activity, Gauge, RotateCcw, Sparkles,
 } from 'lucide-react';
 import type { OccupancyGroup, WorkshopProcess, Fixture, TankDimension, WPSFFactor, SubMeterZone } from '@/types';
+import { calculateAll } from '@/calculations/engine';
 
 // ============================================================
 // STEP 1 — PROJECT DETAILS
@@ -2053,10 +2054,42 @@ export function StepDesignReview() {
 
 export function StepReport() {
   const { project, results, exportJSON } = useProject();
+  const [template, setTemplate] = useState<'Student' | 'Client' | 'Engineer'>('Client');
+  const currentResults = useMemo(() => calculateAll({ ...project, futureExpansion: { ...project.futureExpansion, enabled: false, percentageGrowth: 0 } }), [project]);
+  const templateNotes = {
+    Student: 'Learning view: review the inputs, assumptions, and worked explanations alongside these results.',
+    Client: 'Plain-language view: review expected demand, storage, reuse potential, and the decisions still to confirm.',
+    Engineer: 'Technical view: review calculation outputs, source references, assumptions, and unresolved warnings.',
+  };
 
   return (
     <div className="space-y-6">
       <SectionHeader step={15} title="Report & Export" subtitle="Generate professional engineering documentation" icon={<FileText className="w-6 h-6 text-blue-600" />} />
+
+      <Card>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><h3 className="text-sm font-semibold text-slate-800">One-page summary preview</h3><p className="mt-1 text-xs text-slate-500">Choose a reading style for this on-screen preview.</p></div>
+          <div className="flex flex-wrap gap-1" role="group" aria-label="Summary preview style">
+            {(['Student','Client','Engineer'] as const).map((option) => <button key={option} type="button" aria-pressed={template === option} onClick={() => setTemplate(option)} className={`rounded-lg border px-3 py-2 text-xs font-semibold ${template === option ? 'border-blue-600 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>{option}</button>)}
+          </div>
+        </div>
+        <p className="mt-3 rounded-lg bg-blue-50 p-3 text-xs text-blue-900">{templateNotes[template]}</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-lg bg-slate-50 p-3"><div className="text-[11px] text-slate-500">Average daily demand</div><div className="mt-1 text-sm font-bold text-slate-900">{results.add ? `${results.add.finalADDm3.toFixed(2)} m³/day` : 'Not available'}</div></div>
+          <div className="rounded-lg bg-slate-50 p-3"><div className="text-[11px] text-slate-500">Storage requirement</div><div className="mt-1 text-sm font-bold text-slate-900">{results.storage ? `${results.storage.requiredCapacity.toFixed(2)} m³` : 'Not available'}</div></div>
+          <div className="rounded-lg bg-slate-50 p-3"><div className="text-[11px] text-slate-500">Peak flow</div><div className="mt-1 text-sm font-bold text-slate-900">{results.peakFlow ? `${results.peakFlow.probablePeakFlow.toFixed(2)} L/s` : 'Needs external calculation'}</div></div>
+          <div className="rounded-lg bg-slate-50 p-3"><div className="text-[11px] text-slate-500">Open review items</div><div className="mt-1 text-sm font-bold text-slate-900">{results.warnings.length}</div></div>
+        </div>
+        <div className="mt-4 rounded-lg border border-slate-200 p-3">
+          <h4 className="text-xs font-semibold text-slate-700">Current vs future-growth scenario</h4>
+          <div className="mt-2 grid grid-cols-[1fr_auto_auto] gap-x-4 gap-y-2 text-xs">
+            <span className="text-slate-500">Average daily demand</span><span className="font-semibold text-slate-800">Current: {currentResults.add?.finalADDm3.toFixed(2) ?? '—'} m³/day</span><span className="font-semibold text-slate-800">Future: {results.add?.finalADDm3.toFixed(2) ?? '—'} m³/day</span>
+            <span className="text-slate-500">Storage requirement</span><span className="font-semibold text-slate-800">Current: {currentResults.storage?.requiredCapacity.toFixed(2) ?? '—'} m³</span><span className="font-semibold text-slate-800">Future: {results.storage?.requiredCapacity.toFixed(2) ?? '—'} m³</span>
+          </div>
+          <p className="mt-2 text-[10px] text-slate-500">Current holds future expansion off; Future uses the project’s saved growth assumptions. Both use the existing calculation engine.</p>
+        </div>
+        <p className="mt-3 text-[10px] text-slate-500">The preview style does not alter the existing PDF, Word, or Excel export formats.</p>
+      </Card>
 
       {results.add && (
         <Card>

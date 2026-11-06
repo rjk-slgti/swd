@@ -11,12 +11,16 @@ import type { ProjectData, AllResults, FactorOverride } from '@/types';
 import { createEmptyProject, createSampleProject, defaultWPSFFactors } from '@/data/defaults';
 import { calculateAll } from '@/calculations/engine';
 import { parseProject } from '@/utils/projectValidation';
+import { readProjectRecord, writeProjectRecord } from '@/utils/projectStorage';
 
 const STORAGE_KEY = 'water-services-projects';
 const ACTIVE_KEY = 'water-services-active';
 
 interface ProjectContextValue {
   storageError: string;
+  storageBackend: 'Loading' | 'IndexedDB' | 'Browser storage';
+  lastSavedAt: string | null;
+  lastBackupAt: string | null;
   project: ProjectData;
   results: AllResults;
   savedProjects: { name: string; data: ProjectData }[];
@@ -41,6 +45,12 @@ const ProjectContext = createContext<ProjectContextValue | null>(null);
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
   const [storageError, setStorageError] = useState('');
+  const [storageBackend, setStorageBackend] = useState<'Loading' | 'IndexedDB' | 'Browser storage'>('Loading');
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [lastBackupAt, setLastBackupAt] = useState<string | null>(() => {
+    try { return localStorage.getItem('swd-last-json-backup'); } catch { return null; }
+  });
+  const [storageReady, setStorageReady] = useState(false);
   const [studentMode, setStudentModeState] = useState<boolean>(() => {
     try {
       const stored = localStorage.getItem('swd-student-mode');
@@ -84,40 +94,78 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 
   const [savedProjects, setSavedProjects] = useState<{ name: string; data: ProjectData }[]>([]);
 
-  // Load saved projects list on mount
+  // Prefer IndexedDB and migrate existing browser-local records on first load.
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const list: unknown = JSON.parse(saved);
-        if (Array.isArray(list)) {
-          setSavedProjects(
-            list.flatMap((entry) => {
-              try {
-                return typeof entry.name === 'string'
-                  ? [{ name: entry.name, data: parseProject(entry.data) }]
-                  : [];
-              } catch {
-                return [];
-              }
-            })
-          );
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const storedActive = await readProjectRecord<unknown>(ACTIVE_KEY);
+        const legacyActive = localStorage.getItem(ACTIVE_KEY);
+        const active = storedActive ?? (legacyActive ? JSON.parse(legacyActive) : undefined);
+        if (active) {
+          const parsed = parseProject(active);
+          setProjectState(parsed);
+          if (storedActive === undefined) await writeProjectRecord(ACTIVE_KEY, parsed);
         }
+
+        const storedProjects = await readProjectRecord<unknown>(STORAGE_KEY);
+        const legacyProjects = localStorage.getItem(STORAGE_KEY);
+        const rawProjects = storedProjects ?? (legacyProjects ? JSON.parse(legacyProjects) : []);
+        if (Array.isArray(rawProjects)) {
+          const parsedProjects = rawProjects.flatMap((entry) => {
+            try {
+              return typeof entry.name === 'string' ? [{ name: entry.name, data: parseProject(entry.data) }] : [];
+            } catch {
+              return [];
+            }
+          });
+          setSavedProjects(parsedProjects);
+          if (storedProjects === undefined) await writeProjectRecord(STORAGE_KEY, parsedProjects);
+        }
+        if (!cancelled) setStorageBackend('IndexedDB');
+      } catch {
+        if (!cancelled) {
+          setStorageBackend('Browser storage');
+          setStorageError('Using browser storage fallback. Export a JSON backup regularly.');
+        }
+      } finally {
+        if (!cancelled) setStorageReady(true);
       }
-    } catch {
-      // ignore
-    }
+    };
+    void load();
+    return () => { cancelled = true; };
   }, []);
 
-  // Persist active project to localStorage
+  // Keep a localStorage safety copy while using IndexedDB as the primary store.
   useEffect(() => {
+    if (!storageReady) return;
+    const savedAt = new Date().toISOString();
+    let fallbackSaved = false;
     try {
       localStorage.setItem(ACTIVE_KEY, JSON.stringify(project));
-      setStorageError('');
+      fallbackSaved = true;
     } catch {
-      setStorageError('Automatic save failed. Export a JSON backup before closing this page.');
+      // IndexedDB remains the primary storage if the browser copy is full.
     }
-  }, [project]);
+    void writeProjectRecord(ACTIVE_KEY, project).then(() => {
+      setStorageBackend('IndexedDB');
+      setStorageError('');
+      setLastSavedAt(savedAt);
+    }).catch(() => {
+      setStorageBackend('Browser storage');
+      setStorageError(fallbackSaved ? 'IndexedDB is unavailable; changes are saved in this browser. Export a JSON backup regularly.' : 'Automatic save failed. Export a JSON backup before closing this page.');
+      if (fallbackSaved) setLastSavedAt(savedAt);
+    });
+  }, [project, storageReady]);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(savedProjects)); } catch { /* IndexedDB remains primary */ }
+    void writeProjectRecord(STORAGE_KEY, savedProjects).catch(() => {
+      setStorageBackend('Browser storage');
+      setStorageError('Saved project list is using browser storage fallback. Export JSON backups regularly.');
+    });
+  }, [savedProjects, storageReady]);
 
   // Recalculate results whenever project changes
   const results = useMemo(() => calculateAll(project), [project]);
@@ -205,6 +253,9 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+    const exportedAt = new Date().toISOString();
+    setLastBackupAt(exportedAt);
+    try { localStorage.setItem('swd-last-json-backup', exportedAt); } catch { /* backup itself has already been downloaded */ }
   }, [project]);
 
   const importJSON = useCallback(async (file: File) => {
@@ -327,6 +378,9 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     <ProjectContext.Provider
       value={{
         storageError,
+        storageBackend,
+        lastSavedAt,
+        lastBackupAt,
         project,
         results,
         savedProjects,

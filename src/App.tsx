@@ -40,6 +40,9 @@ function AppContent() {
   const {
     project,
     results,
+    storageBackend,
+    lastSavedAt,
+    lastBackupAt,
     savedProjects,
     storageError,
     saveProject,
@@ -255,7 +258,11 @@ function AppContent() {
         {/* Main Calculation Canvas */}
         <main className="flex-1 min-w-0 overflow-y-auto bg-slate-50/70 pb-16 xl:pb-0 print:bg-white">
           <div className="max-w-5xl mx-auto p-4 md:p-6 lg:p-8 print:p-0 print:max-w-none">
-            <div className="mb-4 flex justify-end print:hidden">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-[11px] text-slate-500" role="status">{lastSavedAt ? `Saved ${new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${storageBackend === 'IndexedDB' ? 'on this device' : 'browser fallback'}` : 'Saving project…'}</p>
+                {(!lastBackupAt || Date.now() - new Date(lastBackupAt).getTime() > 30 * 24 * 60 * 60 * 1000) && <button type="button" onClick={exportJSON} className="text-[11px] font-semibold text-amber-800 underline">Download a JSON backup</button>}
+              </div>
               <button onClick={() => setActiveView('intake')} className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-800 hover:bg-blue-50">Easy mode: project intake</button>
             </div>
             {storageError && (
