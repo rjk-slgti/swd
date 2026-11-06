@@ -96,6 +96,18 @@ export function PrototypeDefaultBadge({
   );
 }
 
+export type Provenance = 'Default' | 'Assumed' | 'User-entered' | 'Imported';
+
+export function ProvenanceBadge({ value }: { value: Provenance | string }) {
+  const styles: Record<string, string> = {
+    Default: 'border-slate-200 bg-slate-50 text-slate-600',
+    Assumed: 'border-amber-200 bg-amber-50 text-amber-800',
+    'User-entered': 'border-blue-200 bg-blue-50 text-blue-800',
+    Imported: 'border-violet-200 bg-violet-50 text-violet-800',
+  };
+  return <span className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${styles[value] ?? styles.Default}`}>{value}</span>;
+}
+
 // ============================================================
 // EDUCATIONAL EXPANDABLE CARD (Section 66)
 // ============================================================
@@ -158,6 +170,7 @@ interface NumberInputProps {
   source?: string;
   status?: string;
   isPrototypeDefault?: boolean;
+  provenance?: Provenance;
 }
 
 export function NumberInput({
@@ -172,6 +185,7 @@ export function NumberInput({
   source,
   status,
   isPrototypeDefault,
+  provenance,
 }: NumberInputProps) {
   const upperBound = max ?? (unit === '%' ? 100 : 1e9);
   const invalid = value < min || value > upperBound;
@@ -214,7 +228,10 @@ export function NumberInput({
         <label className="block text-sm font-medium text-slate-700 truncate" title={tooltip}>
           {label}
         </label>
-        {isPrototypeDefault && <PrototypeDefaultBadge />}
+        <span className="inline-flex items-center gap-2">
+          {provenance && <ProvenanceBadge value={provenance} />}
+          {isPrototypeDefault && <PrototypeDefaultBadge />}
+        </span>
       </div>
       <div className="flex items-center gap-2">
         <input

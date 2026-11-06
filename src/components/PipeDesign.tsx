@@ -155,15 +155,15 @@ export function StepPipeDesign() {
           <Card key={pipe.id}>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
               <TextInput label="Pipe / Reach Identifier" value={pipe.label} onChange={(label) => update(pipe.id, { label })} />
-              <TextInput label="Material Specification" value={pipe.material} onChange={(material) => update(pipe.id, { material })} />
-              <NumberInput label="Internal Diameter (ID)" unit="mm" value={pipe.internalDiameter} onChange={(internalDiameter) => update(pipe.id, { internalDiameter })} />
-              <NumberInput label="Reach Length" unit="m" value={pipe.length} onChange={(length) => update(pipe.id, { length })} />
-              <NumberInput label="Flow (0 uses confirmed peak)" unit="L/s" step={0.01} value={pipe.flow} onChange={(flow) => update(pipe.id, { flow })} />
-              <NumberInput label="Hazen–Williams C Factor" unit="—" min={1} value={pipe.hazenWilliamsC} onChange={(hazenWilliamsC) => update(pipe.id, { hazenWilliamsC })} status="Engineering Assumption" />
-              <NumberInput label="Inlet Available Head" unit="m" value={pipe.inletHead} onChange={(inletHead) => update(pipe.id, { inletHead })} />
-              <NumberInput label="Elevation Rise (Δz)" unit="m" min={-10000} value={pipe.elevationDifference} onChange={(elevationDifference) => update(pipe.id, { elevationDifference })} />
-              <NumberInput label="Fitting Equivalent Loss" unit="m" value={pipe.fittingLoss} onChange={(fittingLoss) => update(pipe.id, { fittingLoss })} />
-              <NumberInput label="Max Velocity Criterion" unit="m/s" step={0.1} value={pipe.maxVelocity} onChange={(maxVelocity) => update(pipe.id, { maxVelocity })} status="User Defined" />
+              <TextInput label="Pipe material (for identification)" value={pipe.material} onChange={(material) => update(pipe.id, { material })} />
+              <NumberInput label="Inside diameter" unit="mm" tooltip="The clear opening inside the pipe. Use the product data for the selected pipe." value={pipe.internalDiameter} onChange={(internalDiameter) => update(pipe.id, { internalDiameter })} />
+              <NumberInput label="Pipe length" unit="m" tooltip="Measured length along this pipe reach." value={pipe.length} onChange={(length) => update(pipe.id, { length })} />
+              <NumberInput label="Water flow (0 uses accepted peak flow)" unit="L/s" step={0.01} value={pipe.flow} onChange={(flow) => update(pipe.id, { flow })} />
+              <NumberInput label="Pipe roughness coefficient (Hazen–Williams C)" unit="—" min={1} tooltip="Engineering coefficient used to estimate friction loss. Confirm it from an applicable project source; changing the material name does not change this value." value={pipe.hazenWilliamsC} onChange={(hazenWilliamsC) => update(pipe.id, { hazenWilliamsC })} status="Engineering Assumption" />
+              <NumberInput label="Pressure head available at inlet" unit="m" tooltip="Available water pressure expressed as metres of water head." value={pipe.inletHead} onChange={(inletHead) => update(pipe.id, { inletHead })} />
+              <NumberInput label="Height change (uphill is positive)" unit="m" min={-10000} tooltip="Elevation difference from the inlet to the end of this reach. Enter a negative value for a lower outlet." value={pipe.elevationDifference} onChange={(elevationDifference) => update(pipe.id, { elevationDifference })} />
+              <NumberInput label="Extra head loss through fittings" unit="m" tooltip="Combined allowance for bends, valves, and other local restrictions." value={pipe.fittingLoss} onChange={(fittingLoss) => update(pipe.id, { fittingLoss })} />
+              <NumberInput label="Maximum flow speed (velocity)" unit="m/s" step={0.1} tooltip="Project-selected upper limit for the calculated water speed in this reach." value={pipe.maxVelocity} onChange={(maxVelocity) => update(pipe.id, { maxVelocity })} status="User Defined" />
               <div className="lg:col-span-2">
                 <TextInput label="Design Basis / Standard Source" value={pipe.source} onChange={(source) => update(pipe.id, { source })} />
               </div>
