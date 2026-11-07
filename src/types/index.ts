@@ -401,6 +401,12 @@ export interface PipeDesign {
   elevationDifference: number; // m
   fittingLoss: number; // m
   source: string;
+  lossMethod?: 'Hazen-Williams' | 'Darcy-Weisbach';
+  roughnessMm?: number;
+  minorLossK?: number;
+  fromNode?: string;
+  toNode?: string;
+  minimumVelocity?: number;
 }
 
 // ----------------------------------------------------------------
@@ -524,6 +530,17 @@ export interface FutureExpansion {
   futureYear: number;
 }
 
+/** Optional comparison tools. These inputs never affect baseline calculations unless explicitly selected. */
+export interface AdvancedDesignConfig {
+  stochasticDemand: { enabled: boolean; days: number; seed: number; intervalSeconds: number; profiles: { fixtureType: string; usesPerDay: number; flowLps: number; durationSeconds: number }[] };
+  pumpCurve: { enabled: boolean; points: { flowLps: number; headM: number }[]; source: string; npshRequiredM: number; suctionLiftM: number; siteElevationM: number; waterTemperatureC: number; dailyDemandM3: number; startLevelM: number; stopLevelM: number; tankPlanAreaM2: number; maximumStartsPerHour: number };
+  rainwaterDaily: { dailyRainfallMm: number[]; dailyNonPotableDemandM3: number; tankSizesM3: number[]; source: string };
+  hotWaterRecirculation: { enabled: boolean; pipeLengthM: number; insulationWPerM: number; recoveryPowerKW: number; recoveryHours: number; source: string };
+  networkTerminalDemands: { node: string; flowLps: number }[];
+  networkSourceNode: string;
+  regionalDefaults: { id: string; parameter: string; value: string; unit: string; source: string; year: string; verify: boolean }[];
+}
+
 // ----------------------------------------------------------------
 // Standards & References
 // ----------------------------------------------------------------
@@ -645,6 +662,7 @@ export interface ProjectData {
   fireWater: FireWaterConfig;
   subMetering: SubMeteringConfig;
   futureExpansion: FutureExpansion;
+  advancedDesign?: AdvancedDesignConfig;
   standards: StandardReference[];
   designMode: DesignMode;
 

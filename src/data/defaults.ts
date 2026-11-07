@@ -1063,8 +1063,8 @@ export function createSampleProject(): ProjectData {
       classification: 'PROTOTYPE STANDARD FACTOR',
     },
     pipes: [
-      { id: 'PIPE-01', label: 'Rising Main — UG Sump to Roof Header', material: 'uPVC', inletHead: 30, hazenWilliamsC: 140, maxVelocity: 2.0, internalDiameter: 65, length: 120, flow: 0, elevationDifference: 18, fittingLoss: 2, source: 'WPSF-PIP-01 Design Criterion' },
-      { id: 'PIPE-02', label: 'Distribution Header — Academic Complex', material: 'uPVC', inletHead: 30, hazenWilliamsC: 140, maxVelocity: 2.0, internalDiameter: 50, length: 80, flow: 0, elevationDifference: 0, fittingLoss: 1.5, source: 'WPSF-PIP-01 Design Criterion' },
+      { id: 'PIPE-01', label: 'Rising Main — UG Sump to Roof Header', material: 'uPVC', inletHead: 30, hazenWilliamsC: 140, maxVelocity: 2.0, internalDiameter: 65, length: 120, flow: 0, elevationDifference: 18, fittingLoss: 2, source: 'WPSF-PIP-01 Design Criterion', lossMethod: 'Hazen-Williams', roughnessMm: 0.15, minorLossK: 0, fromNode: '', toNode: '', minimumVelocity: 0 },
+      { id: 'PIPE-02', label: 'Distribution Header — Academic Complex', material: 'uPVC', inletHead: 30, hazenWilliamsC: 140, maxVelocity: 2.0, internalDiameter: 50, length: 80, flow: 0, elevationDifference: 0, fittingLoss: 1.5, source: 'WPSF-PIP-01 Design Criterion', lossMethod: 'Hazen-Williams', roughnessMm: 0.15, minorLossK: 0, fromNode: '', toNode: '', minimumVelocity: 0 },
     ],
     hotWater: {
       enabled: true,
@@ -1151,6 +1151,18 @@ export function createSampleProject(): ProjectData {
       additionalBuildings: 1,
       percentageGrowth: 20,
       futureYear: 10,
+    },
+    advancedDesign: {
+      stochasticDemand: { enabled: false, days: 30, seed: 1, intervalSeconds: 60, profiles: [] },
+      pumpCurve: { enabled: false, points: [], source: '', npshRequiredM: 0, suctionLiftM: 0, siteElevationM: 0, waterTemperatureC: 20, dailyDemandM3: 0, startLevelM: 0, stopLevelM: 0, tankPlanAreaM2: 0, maximumStartsPerHour: 0 },
+      rainwaterDaily: { dailyRainfallMm: [], dailyNonPotableDemandM3: 0, tankSizesM3: [5, 10, 20, 30], source: '' },
+      hotWaterRecirculation: { enabled: false, pipeLengthM: 0, insulationWPerM: 0, recoveryPowerKW: 0, recoveryHours: 0, source: '' },
+      networkTerminalDemands: [],
+      networkSourceNode: 'Source',
+      regionalDefaults: [
+        { id: 'LK-NWSDB-01', parameter: 'Per-capita demand', value: '', unit: 'L/person/day', source: '', year: '', verify: true },
+        { id: 'LK-RAIN-01', parameter: 'Daily rainfall series', value: '', unit: 'mm/day', source: '', year: '', verify: true },
+      ],
     },
     standards: [...defaultStandards],
     designMode: 'learning',

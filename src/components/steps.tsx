@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import type { OccupancyGroup, WorkshopProcess, Fixture, TankDimension, WPSFFactor, SubMeterZone } from '@/types';
 import { calculateAll } from '@/calculations/engine';
+import { calculateHotWaterRecirculation, calculateNpshAvailable, estimatePumpStartsPerHour, findPumpDutyPoint, simulateDailyRainwater, simulateFixtureDemand } from '@/calculations/advancedEngineering';
 import { DesignIssuesPanel } from '@/components/DesignIssuesPanel';
 
 // ============================================================
@@ -666,6 +667,9 @@ export function StepPeakDemand() {
   const { project, setProject, results } = useProject();
   const [licensedTableConfirmed, setLicensedTableConfirmed] = useState(false);
   const [peakMessage, setPeakMessage] = useState('');
+  const stochastic = project.advancedDesign?.stochasticDemand;
+  const simulation = (() => { try { return stochastic?.enabled && stochastic.profiles.length ? simulateFixtureDemand(stochastic.profiles, stochastic.days, stochastic.seed, stochastic.intervalSeconds) : null; } catch { return null; } })();
+  const updateStochastic = (patch: Partial<NonNullable<typeof stochastic>>) => setProject(p => ({ ...p, advancedDesign: { ...p.advancedDesign!, stochasticDemand: { ...p.advancedDesign!.stochasticDemand, ...patch } } }));
   const trainingExample = project.peakDesign.source.startsWith('TRAINING-EXAMPLE:');
 
   const importFixtureTable = async (file: File) => {
@@ -768,6 +772,16 @@ export function StepPeakDemand() {
         <input aria-label="Import licensed fixture table CSV or JSON" type="file" accept=".csv,.json,text/csv,application/json" className="mt-2 block w-full text-xs text-slate-600 file:mr-3 file:min-h-10 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:font-semibold file:text-blue-800" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importFixtureTable(file); event.target.value = ''; }} />
         {peakMessage && <p role="status" className="mt-2 text-xs text-blue-800">{peakMessage}</p>}
       </Card>
+
+      {stochastic && <Card>
+        <div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-800">Optional fixture event simulation</h3><p className="text-xs text-slate-600">A seeded, editable usage-pattern estimate. Events are placed uniformly across the day; use project-specific usage data when available. It does not replace the confirmed design flow.</p></div><ToggleInput label="Enable" checked={stochastic.enabled} onChange={enabled => updateStochastic({ enabled })} /></div>
+        {stochastic.enabled && <div className="mt-4 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-3"><NumberInput label="Simulated days" min={1} max={3650} value={stochastic.days} onChange={days => updateStochastic({ days: Math.round(days) })} /><NumberInput label="Random seed" min={1} value={stochastic.seed} onChange={seed => updateStochastic({ seed: Math.round(seed) })} /><NumberInput label="Peak interval" unit="s" min={1} max={3600} value={stochastic.intervalSeconds} onChange={intervalSeconds => updateStochastic({ intervalSeconds: Math.round(intervalSeconds) })} /></div>
+          {stochastic.profiles.map((profile, index) => <div key={`${profile.fixtureType}-${index}`} className="grid gap-2 rounded-lg bg-slate-50 p-3 sm:grid-cols-4"><TextInput label="Fixture / use" value={profile.fixtureType} onChange={fixtureType => updateStochastic({ profiles: stochastic.profiles.map((item, i) => i === index ? { ...item, fixtureType } : item) })} /><NumberInput label="Uses per day" min={0} value={profile.usesPerDay} onChange={usesPerDay => updateStochastic({ profiles: stochastic.profiles.map((item, i) => i === index ? { ...item, usesPerDay } : item) })} /><NumberInput label="Flow per event" unit="L/s" min={0} step={0.01} value={profile.flowLps} onChange={flowLps => updateStochastic({ profiles: stochastic.profiles.map((item, i) => i === index ? { ...item, flowLps } : item) })} /><NumberInput label="Event duration" unit="s" min={0} value={profile.durationSeconds} onChange={durationSeconds => updateStochastic({ profiles: stochastic.profiles.map((item, i) => i === index ? { ...item, durationSeconds } : item) })} /></div>)}
+          <button type="button" onClick={() => updateStochastic({ profiles: [...stochastic.profiles, { fixtureType: `Fixture ${stochastic.profiles.length + 1}`, usesPerDay: 1, flowLps: 0.1, durationSeconds: 10 }] })} className="min-h-10 rounded-lg border border-slate-300 px-3 text-xs font-semibold">Add use pattern</button>
+          {simulation ? <div className="grid gap-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm sm:grid-cols-3"><div>50th percentile daily peak: <strong>{simulation.percentile50Lps.toFixed(2)} L/s</strong></div><div>95th percentile: <strong>{simulation.percentile95Lps.toFixed(2)} L/s</strong></div><div>Highest simulated: <strong>{simulation.maximumLps.toFixed(2)} L/s</strong></div><p className="sm:col-span-3 text-xs text-amber-900">{simulation.disclaimer} This comparison is excluded from final reports and baseline pump/pipe calculations.</p></div> : <p className="text-xs text-amber-800">Add a use pattern to run the estimate. Results are excluded from final reports.</p>}
+        </div>}
+      </Card>}
 
       <Card>
         <div className="grid md:grid-cols-2 gap-4">
@@ -1107,7 +1121,14 @@ export function StepStorage() {
 
 export function StepPumpDesign() {
   const { project, setProject, results } = useProject();
+  const [pumpCurveText, setPumpCurveText] = useState(() => project.advancedDesign?.pumpCurve.points.map(point => `${point.flowLps}, ${point.headM}`).join('\n') ?? '');
   const p = project.pump;
+  const curveConfig = project.advancedDesign?.pumpCurve;
+  const pumpDuty = curveConfig?.enabled ? findPumpDutyPoint(curveConfig.points, p.staticHead + p.requiredResidualPressure, p.pipeFriction + p.fittingLosses, results.pump?.designFlow ?? p.requiredFlow) : null;
+  const npshAvailable = curveConfig ? calculateNpshAvailable(curveConfig.siteElevationM, curveConfig.waterTemperatureC, curveConfig.suctionLiftM) : 0;
+  const cycleDrawdownM3 = curveConfig ? Math.abs(curveConfig.startLevelM - curveConfig.stopLevelM) * curveConfig.tankPlanAreaM2 : 0;
+  const startsPerHour = curveConfig ? estimatePumpStartsPerHour(curveConfig.dailyDemandM3, cycleDrawdownM3) : null;
+  const updateCurve = (patch: Partial<NonNullable<typeof curveConfig>>) => setProject(current => ({ ...current, advancedDesign: { ...current.advancedDesign!, pumpCurve: { ...current.advancedDesign!.pumpCurve, ...patch } } }));
 
   const update = (field: keyof typeof p, value: number | string) => {
     setProject((proj) => ({ ...proj, pump: { ...proj.pump, [field]: value } }));
@@ -1217,6 +1238,19 @@ export function StepPumpDesign() {
         </>
       )}
 
+      {curveConfig && <Card>
+        <div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-800">Optional manufacturer curve and suction check</h3><p className="text-xs text-slate-600">Enter points from the selected pump’s manufacturer data. Results are a preliminary comparison and do not replace the manufacturer’s selection or NPSH margin requirements.</p></div><ToggleInput label="Enable" checked={curveConfig.enabled} onChange={enabled => updateCurve({ enabled })} /></div>
+        {curveConfig.enabled && <div className="mt-3 space-y-3">
+          <label className="block text-xs font-medium text-slate-700" htmlFor="pump-curve-points">Pump curve points: flow L/s, head m (one point per line)</label>
+          <textarea id="pump-curve-points" rows={4} value={pumpCurveText} onChange={event => { setPumpCurveText(event.target.value); const points = event.target.value.split(/\r?\n/).filter(line => line.trim()).map(line => line.split(/[;,\s]+/).map(Number)); if (points.length >= 2 && points.every(point => point.length === 2 && point.every(Number.isFinite))) updateCurve({ points: points.map(([flowLps, headM]) => ({ flowLps, headM })) }); }} className="w-full rounded-lg border border-slate-300 p-2 font-mono text-xs" placeholder={'0, 40\n2, 35\n4, 20'} />
+          <div className="grid gap-3 sm:grid-cols-3"><NumberInput label="Manufacturer NPSH required" unit="m" min={0} step={0.1} value={curveConfig.npshRequiredM} onChange={npshRequiredM => updateCurve({ npshRequiredM })} /><NumberInput label="Suction lift" unit="m" min={0} value={curveConfig.suctionLiftM} onChange={suctionLiftM => updateCurve({ suctionLiftM })} /><NumberInput label="Site elevation" unit="m" min={0} max={9000} value={curveConfig.siteElevationM} onChange={siteElevationM => updateCurve({ siteElevationM })} /><NumberInput label="Water temperature" unit="°C" min={0} max={100} value={curveConfig.waterTemperatureC} onChange={waterTemperatureC => updateCurve({ waterTemperatureC })} /><NumberInput label="Daily system demand" unit="m³/day" min={0} step={0.1} value={curveConfig.dailyDemandM3} onChange={dailyDemandM3 => updateCurve({ dailyDemandM3 })} /><NumberInput label="Pump start level" unit="m" min={0} step={0.1} value={curveConfig.startLevelM} onChange={startLevelM => updateCurve({ startLevelM })} /><NumberInput label="Pump stop level" unit="m" min={0} step={0.1} value={curveConfig.stopLevelM} onChange={stopLevelM => updateCurve({ stopLevelM })} /><NumberInput label="Tank plan area at levels" unit="m²" min={0} step={0.1} value={curveConfig.tankPlanAreaM2} onChange={tankPlanAreaM2 => updateCurve({ tankPlanAreaM2 })} /><NumberInput label="Maximum starts allowed" unit="starts/h" min={0} value={curveConfig.maximumStartsPerHour} onChange={maximumStartsPerHour => updateCurve({ maximumStartsPerHour })} /></div>
+          <TextInput label="Pump curve source / model and revision" value={curveConfig.source} onChange={source => updateCurve({ source })} />
+          <p className="text-xs">Estimated NPSH available (suction friction not included): <strong>{npshAvailable.toFixed(2)} m</strong> · Manufacturer NPSH required: <strong>{curveConfig.npshRequiredM.toFixed(2)} m</strong> · {npshAvailable > curveConfig.npshRequiredM ? 'Entered values show positive difference; verify required project margin.' : 'Review: available value does not exceed manufacturer NPSH required.'}</p>
+          {pumpDuty ? <p className="rounded-lg bg-blue-50 p-3 text-sm">Interpolated pump/system intersection: <strong>{pumpDuty.flowLps.toFixed(2)} L/s at {pumpDuty.headM.toFixed(2)} m</strong>.</p> : <p className="text-xs text-amber-800">Enter at least two valid curve points that bracket an intersection with the current system curve.</p>}
+          {startsPerHour !== null && cycleDrawdownM3 > 0 && <p className="text-xs text-amber-800">Start/stop drawdown volume: {cycleDrawdownM3.toFixed(2)} m³. Average-demand cycling screen: {startsPerHour.toFixed(2)} starts/h {curveConfig.maximumStartsPerHour > 0 ? (startsPerHour > curveConfig.maximumStartsPerHour ? `exceeds the user-entered ${curveConfig.maximumStartsPerHour} starts/h review limit.` : `is within the user-entered ${curveConfig.maximumStartsPerHour} starts/h review limit.`) : 'Enter a project-selected maximum to compare.'} This estimate assumes constant plan area and omits actual demand timing, control logic and inflow.</p>}
+        </div>}
+      </Card>}
+
       <EduCard title="Engineering Note" icon="tip">
         Pump recommendations are preliminary. Final pump selection must be verified against manufacturer's pump curves, NPSH requirements, and system head curves.
       </EduCard>
@@ -1320,6 +1354,7 @@ export function StepWastewater() {
 
 export function StepRainwater() {
   const { project, setProject, results } = useProject();
+  const [dailyRainText, setDailyRainText] = useState(() => project.advancedDesign?.rainwaterDaily.dailyRainfallMm.join(', ') ?? '');
   const rw = project.rainwater;
 
   const update = (field: keyof typeof rw, value: number | boolean) => {
@@ -1327,6 +1362,11 @@ export function StepRainwater() {
   };
 
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const dailyConfig = project.advancedDesign?.rainwaterDaily;
+  const dailyTextValues = dailyRainText.split(/[\s,;]+/).filter(Boolean).map(Number);
+  const dailyTextValid = dailyTextValues.every(value => Number.isFinite(value) && value >= 0);
+  const dailySweep = (() => { try { return dailyTextValid && dailyConfig?.dailyRainfallMm.length ? simulateDailyRainwater({ rainfallMm: dailyConfig.dailyRainfallMm, roofAreaM2: rw.roofArea, runoffCoefficient: rw.runoffCoefficient, efficiencyPct: rw.filterEfficiency * rw.collectionEfficiency / 100, firstFlushMm: rw.firstFlushLoss, demandM3Day: dailyConfig.dailyNonPotableDemandM3, tankSizesM3: dailyConfig.tankSizesM3 }) : null; } catch { return null; } })();
+  const updateDaily = (patch: Partial<NonNullable<typeof dailyConfig>>) => setProject(p => ({ ...p, advancedDesign: { ...p.advancedDesign!, rainwaterDaily: { ...p.advancedDesign!.rainwaterDaily, ...patch } } }));
 
   return (
     <div className="space-y-6">
@@ -1437,6 +1477,18 @@ export function StepRainwater() {
           </Card>
         </>
       )}
+      {dailyConfig && <Card>
+        <h3 className="text-sm font-semibold text-slate-800">Optional daily storage and reliability study</h3>
+        <p className="mt-1 text-xs text-slate-600">This comparison needs a project-approved daily rainfall series. The entered first-flush depth is applied to each non-zero rainfall day. The existing monthly quick estimate remains unchanged. Rainfall source and record period must be documented by the designer.</p>
+        <div className="mt-3 grid gap-3 md:grid-cols-2"><NumberInput label="Non-potable demand" unit="m³/day" min={0} step={0.1} value={dailyConfig.dailyNonPotableDemandM3} onChange={dailyNonPotableDemandM3 => updateDaily({ dailyNonPotableDemandM3 })} /><TextInput label="Tank sizes to compare (m³, comma-separated)" value={dailyConfig.tankSizesM3.join(', ')} onChange={value => { const sizes = value.split(',').map(v => Number(v.trim())); if (sizes.every(Number.isFinite)) updateDaily({ tankSizesM3: sizes }); }} /><TextInput label="Rain gauge / dataset and period" value={dailyConfig.source} onChange={source => updateDaily({ source })} /></div>
+        <label className="mt-3 block text-xs font-medium text-slate-700" htmlFor="daily-rainfall-series">Daily rainfall series (mm/day, CSV or comma-separated)</label>
+        <textarea id="daily-rainfall-series" rows={4} value={dailyRainText} onChange={event => { setDailyRainText(event.target.value); const values = event.target.value.split(/[\s,;]+/).filter(Boolean).map(Number); if (values.every(Number.isFinite)) updateDaily({ dailyRainfallMm: values }); }} className="mt-1 w-full rounded-lg border border-slate-300 p-2 font-mono text-xs" placeholder="e.g. 0, 2.5, 0, 12, ..." />
+        <label className="mt-2 block text-xs text-slate-600">Or import a rainfall CSV (one daily rainfall value per row): <input type="file" accept=".csv,text/csv" className="mt-1 block min-h-10 w-full text-xs" onChange={event => { const file = event.target.files?.[0]; if (file) void file.text().then(text => { const lines = text.split(/\r?\n/).filter(line => line.trim()); const header = lines[0]?.split(/[;,]/).map(value => value.trim().toLowerCase()) ?? []; const rainfallColumn = header.findIndex(value => /rain|precip/.test(value)); const rows = rainfallColumn >= 0 ? lines.slice(1) : lines; const values = rows.map(line => { const cells = line.split(/[;,]/).map(value => value.trim()); if (rainfallColumn >= 0) return Number(cells[rainfallColumn]); const numeric = cells.map(Number).filter(Number.isFinite); return numeric[numeric.length - 1]; }).filter(Number.isFinite); if (values.length) { setDailyRainText(values.join(', ')); updateDaily({ dailyRainfallMm: values, source: file.name }); } }); event.target.value = ''; }} /></label>
+        {dailyConfig.dailyRainfallMm.length > 0 && <p className="mt-2 text-xs text-slate-600">Loaded {dailyConfig.dailyRainfallMm.length} daily values; total rainfall {dailyConfig.dailyRainfallMm.reduce((a, b) => a + b, 0).toFixed(1)} mm. Source entered: {dailyConfig.source || 'not recorded'}.</p>}
+        {dailySweep && <div className="mt-3 grid gap-4 lg:grid-cols-2">{[['Yield after spill (default)', dailySweep.yieldAfterSpillage], ['Yield before spill (comparison)', dailySweep.yieldBeforeSpillage]].map(([label, rows]) => <div key={String(label)}><h4 className="text-xs font-semibold text-slate-700">{String(label)}</h4><DataTable headers={['Tank m³', 'Reliability %', 'Overflow m³', 'Potable saving %']} rows={(rows as typeof dailySweep.yieldAfterSpillage).map(item => [item.tankCapacityM3, item.reliabilityPct.toFixed(1), item.overflowM3.toFixed(1), item.potableSavingPct.toFixed(1)])} /></div>)}</div>}
+        {!dailySweep && <p className="mt-2 text-xs text-amber-800">Import or enter valid daily rainfall values to compare candidate tank sizes. Values must be non-negative millimetres per day.</p>}
+        <p className="mt-2 text-[11px] text-amber-900">Preliminary comparison only. The daily profile does not assert local rainfall reliability; independently verify the input series and tank operating assumptions.</p>
+      </Card>}
     </div>
   );
 }
@@ -1559,10 +1611,14 @@ export function StepHotWater() {
   const update = (field: keyof typeof hw, value: number | boolean | string) => {
     setProject((p) => ({ ...p, hotWater: { ...p.hotWater, [field]: value } }));
   };
+  const recirculation = project.advancedDesign?.hotWaterRecirculation;
+  const recircResult = recirculation ? calculateHotWaterRecirculation(recirculation.pipeLengthM, recirculation.insulationWPerM, recirculation.recoveryPowerKW, recirculation.recoveryHours) : null;
+  const updateRecirculation = (patch: Partial<NonNullable<typeof recirculation>>) => setProject(current => ({ ...current, advancedDesign: { ...current.advancedDesign!, hotWaterRecirculation: { ...current.advancedDesign!.hotWaterRecirculation, ...patch } } }));
 
   return (
     <div className="space-y-6">
       <SectionHeader title="Hot Water System Design" subtitle="Thermal sizing, recovery power, storage, and Legionella control" icon={<Flame className="w-6 h-6 text-amber-500" />} />
+      <p className="rounded-lg border border-cyan-200 bg-cyan-50 p-3 text-xs text-cyan-950">Solar preheat can be considered as an upstream heat source when a separate collector, storage, controls and seasonal yield study is available. This prototype does not calculate solar collector performance.</p>
 
       <EduCard title="Legionella Control & Thermal Safety Principle" icon="warning">
         <p><strong>BS 8558 / CIBSE Guide G Requirement:</strong> Hot water storage must be maintained at ≥60°C to inhibit the proliferation of <em>Legionella pneumophila</em> bacteria. Water distributed through pipework must arrive at outlets at ≥50°C (≥55°C in healthcare facilities) within 1 minute of running.</p>
@@ -1673,6 +1729,10 @@ export function StepHotWater() {
           />
         </>
       )}
+      {recirculation && <Card>
+        <div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-800">Optional recirculation and recovery screen</h3><p className="text-xs text-slate-600">Uses an entered linear heat-loss assumption; it does not model pipe temperatures, controls, or a detailed solar system.</p></div><ToggleInput label="Enable" checked={recirculation.enabled} onChange={enabled => updateRecirculation({ enabled })} /></div>
+        {recirculation.enabled && <div className="mt-3"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><NumberInput label="Recirculation pipe length" unit="m" min={0} value={recirculation.pipeLengthM} onChange={pipeLengthM => updateRecirculation({ pipeLengthM })} /><NumberInput label="Assumed heat loss" unit="W/m" min={0} step={0.1} value={recirculation.insulationWPerM} onChange={insulationWPerM => updateRecirculation({ insulationWPerM })} /><NumberInput label="Recovery input power" unit="kW" min={0} value={recirculation.recoveryPowerKW} onChange={recoveryPowerKW => updateRecirculation({ recoveryPowerKW })} /><NumberInput label="Recovery hours per day" unit="h/day" min={0} max={24} value={recirculation.recoveryHours} onChange={recoveryHours => updateRecirculation({ recoveryHours })} /></div><TextInput label="Heat-loss basis / source" value={recirculation.source} onChange={source => updateRecirculation({ source })} /><p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm">Estimated recirculation loss: <strong>{recircResult?.heatLossKWhDay.toFixed(2)} kWh/day</strong> · entered recovery capacity: <strong>{recircResult?.availableRecoveryKWhDay.toFixed(2)} kWh/day</strong> · {recircResult?.adequateForEnteredLoss ? 'entered recovery exceeds this estimated loop loss' : 'review recovery capacity against the estimated loop loss'}.</p><p className="text-[11px] text-amber-900">This is a screening energy balance, not a distribution temperature, return temperature, or Legionella verification.</p></div>}
+      </Card>}
     </div>
   );
 }
@@ -2413,7 +2473,7 @@ export function Dashboard({ onSelectStep }: { onSelectStep: (stepId: string) => 
 // ============================================================
 
 export function StepStandards() {
-  const { project, overrideWPSFFactor, resetWPSFFactor, resetAllWPSFFactors } = useProject();
+  const { project, setProject, overrideWPSFFactor, resetWPSFFactor, resetAllWPSFFactors } = useProject();
   const [overrideModalFactor, setOverrideModalFactor] = useState<WPSFFactor | null>(null);
   const [overrideValue, setOverrideValue] = useState<number>(0);
   const [overrideReason, setOverrideReason] = useState<string>('');
@@ -2437,6 +2497,12 @@ export function StepStandards() {
   return (
     <div className="space-y-6">
       <SectionHeader title="Standards & Design Basis" subtitle="Review and manage applicable design standards and controlled prototype factors" icon={<Settings className="w-6 h-6 text-blue-600" />} />
+
+      <Card>
+        <h3 className="text-sm font-semibold text-slate-800">Sri Lanka source register</h3>
+        <p className="mt-1 text-xs text-slate-600">Values are blank until you enter a project-selected criterion. Record its source and year; the verify flag is a reminder, not a compliance check.</p>
+        <div className="mt-3 space-y-3">{(project.advancedDesign?.regionalDefaults ?? []).map((item, index) => <div key={item.id} className="grid gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-5"><TextInput label="Parameter" value={item.parameter} onChange={parameter => setProject(current => ({ ...current, advancedDesign: { ...current.advancedDesign!, regionalDefaults: current.advancedDesign!.regionalDefaults.map((row, i) => i === index ? { ...row, parameter } : row) } }))} /><TextInput label={`Value (${item.unit})`} value={item.value} onChange={value => setProject(current => ({ ...current, advancedDesign: { ...current.advancedDesign!, regionalDefaults: current.advancedDesign!.regionalDefaults.map((row, i) => i === index ? { ...row, value } : row) } }))} /><TextInput label="Unit" value={item.unit} onChange={unit => setProject(current => ({ ...current, advancedDesign: { ...current.advancedDesign!, regionalDefaults: current.advancedDesign!.regionalDefaults.map((row, i) => i === index ? { ...row, unit } : row) } }))} /><TextInput label="Source and edition" value={item.source} onChange={source => setProject(current => ({ ...current, advancedDesign: { ...current.advancedDesign!, regionalDefaults: current.advancedDesign!.regionalDefaults.map((row, i) => i === index ? { ...row, source } : row) } }))} /><div><TextInput label="Year / revision" value={item.year} onChange={year => setProject(current => ({ ...current, advancedDesign: { ...current.advancedDesign!, regionalDefaults: current.advancedDesign!.regionalDefaults.map((row, i) => i === index ? { ...row, year } : row) } }))} /><label className="mt-2 flex items-center gap-2 text-xs text-slate-700"><input type="checkbox" checked={item.verify} onChange={event => setProject(current => ({ ...current, advancedDesign: { ...current.advancedDesign!, regionalDefaults: current.advancedDesign!.regionalDefaults.map((row, i) => i === index ? { ...row, verify: event.target.checked } : row) } }))} />Needs verification</label></div></div>)}<button type="button" onClick={() => setProject(current => ({ ...current, advancedDesign: { ...current.advancedDesign!, regionalDefaults: [...current.advancedDesign!.regionalDefaults, { id: crypto.randomUUID(), parameter: '', value: '', unit: '', source: '', year: '', verify: true }] } }))} className="min-h-10 rounded-lg border border-slate-300 px-3 text-xs font-semibold">Add regional criterion</button></div>
+      </Card>
 
       <EduCard title="Engineering Principle & Controlled Factors" icon="warning">
         Never claim that a particular numerical consumption rate comes directly from a British Standard unless verified. Values shown here as "Engineering Assumption" are preliminary design allowances, not mandatory standard requirements. The Controlled Factor System allows transparent adjustment of baseline values with documented justifications.

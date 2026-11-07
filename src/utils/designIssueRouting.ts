@@ -38,7 +38,7 @@ export function getIssueFieldId(issueId: string): string | undefined {
   if (issueId === 'WRN-PMP-01' || issueId === 'WRN-PMP-02') return 'pump-flow';
   if (issueId === 'WRN-HW-01') return 'hotwater-storage-temp';
   if (issueId === 'WRN-FIR-01' || issueId === 'WRN-FIR-VERIFY') return 'fire-flow';
-  const pipeIssue = issueId.match(/^WRN-PIP-(?:VEL|PRS)-(\d+)$/);
+  const pipeIssue = issueId.match(/^WRN-PIP-(?:VEL|PRS|LOW|FLOW)-(\d+)$/);
   if (pipeIssue) return `pipe-${pipeIssue[1]}-diameter`;
   return undefined;
 }

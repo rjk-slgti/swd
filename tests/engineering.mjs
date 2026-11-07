@@ -9,6 +9,7 @@ try {
   const e = await server.ssrLoadModule('/src/calculations/engine.ts');
   const { parseProject } = await server.ssrLoadModule('/src/utils/projectValidation.ts');
   const { getIssueFieldId, getIssueStepId } = await server.ssrLoadModule('/src/utils/designIssueRouting.ts');
+  const advanced = await server.ssrLoadModule('/src/calculations/advancedEngineering.ts');
   test('Review issues route to the related workflow step', () => {
     assert.equal(getIssueStepId('Water Sources'), 'step5');
     assert.equal(getIssueStepId('Pipework Design'), 'pipes');
@@ -18,8 +19,70 @@ try {
     assert.equal(getIssueFieldId('PEAK-MISSING'), 'peak-design-flow');
     assert.equal(getIssueFieldId('SOURCE-MISSING'), 'water-source-capacity');
     assert.equal(getIssueFieldId('WRN-PIP-VEL-0'), 'pipe-0-diameter');
+    assert.equal(getIssueFieldId('WRN-PIP-LOW-1'), 'pipe-1-diameter');
     assert.equal(getIssueFieldId('WRN-PIP-PRS-2'), 'pipe-2-diameter');
     assert.equal(getIssueFieldId('UNMAPPED-ISSUE'), undefined);
+  });
+  test('Advanced fixture simulation is seeded and remains a separate estimate', () => {
+    const profiles = [{ fixtureType:'tap', usesPerDay:10, flowLps:0.1, durationSeconds:20 }];
+    const a = advanced.simulateFixtureDemand(profiles, 30, 42, 60);
+    assert.deepEqual(advanced.simulateFixtureDemand(profiles, 30, 42, 60), a);
+    assert.equal(a.simulatedDays, 30); assert.match(a.disclaimer, /not code-certified/i);
+  });
+  test('Darcy-Weisbach reports friction and local K losses separately', () => {
+    const plain = advanced.calculateDarcyWeisbach(1, 25, 30, 0.01, 0);
+    const withK = advanced.calculateDarcyWeisbach(1, 25, 30, 0.01, 4);
+    assert.ok(plain.frictionLossM > 0); close(withK.frictionLossM, plain.frictionLossM);
+    close(withK.totalLossM - plain.totalLossM, 4 * (1 / 1000 / (Math.PI * (0.025 ** 2) / 4)) ** 2 / (2 * 9.80665));
+  });
+  test('Network index path selects the lower accumulated head-loss route', () => {
+    const paths = advanced.findLowestLossPaths([{ id:'A', from:'S', to:'X', lossM:3 }, { id:'B', from:'X', to:'T', lossM:4 }, { id:'C', from:'S', to:'T', lossM:10 }], 'S');
+    assert.equal(paths.find(path => path.node === 'T').headLossM, 7);
+    assert.deepEqual(paths.find(path => path.node === 'T').edgeIds, ['A','B']);
+  });
+  test('Simple tree network sums downstream fixture demands through branches', () => {
+    const r = advanced.solveTreeBranchFlows([{ id:'A', from:'S', to:'X' }, { id:'B', from:'X', to:'T' }, { id:'C', from:'S', to:'Y' }], [{ node:'T', flowLps:0.3 }, { node:'Y', flowLps:0.2 }], 'S');
+    close(r.totalDemandLps, 0.5); close(r.edgeFlows.find(e => e.edgeId === 'A').flowLps, 0.3); close(r.edgeFlows.find(e => e.edgeId === 'C').flowLps, 0.2);
+    assert.throws(() => advanced.solveTreeBranchFlows([{ id:'A', from:'S', to:'X' }, { id:'B', from:'X', to:'S' }], [], 'S'), /tree|cycle/i);
+  });
+  test('Opt-in terminal demands feed the connected pipe reach calculations', () => {
+    const p = createEmptyProject(); p.advancedDesign.networkSourceNode = 'S'; p.advancedDesign.networkTerminalDemands = [{ node:'T', flowLps:0.3 }];
+    p.pipes = [{ id:'A', label:'Main', fromNode:'S', toNode:'T', flow:0, internalDiameter:32, length:20, inletHead:20, elevationDifference:0, fittingLoss:0, hazenWilliamsC:140, maxVelocity:2, source:'user' }];
+    const r = e.calculateAll(p); close(r.pipes[0].pipe.flow, 0.3); assert.ok(r.pipes[0].velocity > 0);
+  });
+  test('User-entered low-velocity criterion raises an editable pipe review issue', () => {
+    const p = createEmptyProject(); p.occupancy[0].count = 1; p.occupancy[0].daysPerWeek = 7;
+    p.pipes = [{ id:'P', label:'P1', fromNode:'S', toNode:'T', flow:0.1, internalDiameter:50, length:10, inletHead:20, elevationDifference:0, fittingLoss:0, hazenWilliamsC:140, maxVelocity:5, minimumVelocity:1.5, source:'user criterion' }];
+    const issue = e.calculateAll(p).warnings.find(w => w.id === 'WRN-PIP-LOW-0');
+    assert.ok(issue); assert.equal(getIssueFieldId(issue.id), 'pipe-0-diameter');
+  });
+  test('Opt-in Darcy method changes only explicitly selected pipe results', () => {
+    const p = createEmptyProject();
+    p.pipes = [{ id:'D', label:'Darcy', material:'steel', internalDiameter:25, length:30, flow:1, inletHead:20, elevationDifference:0, fittingLoss:0, hazenWilliamsC:140, maxVelocity:2, source:'user entered', lossMethod:'Darcy-Weisbach', roughnessMm:0.01, minorLossK:4 }];
+    const result = e.calculatePipeFlow(p, null)[0];
+    const expected = advanced.calculateDarcyWeisbach(1, 25, 30, 0.01, 4);
+    close(result.frictionLoss, expected.frictionLossM); close(result.totalPressureLoss, expected.totalLossM);
+    p.pipes[0].lossMethod = 'Hazen-Williams';
+    const legacy = e.calculatePipeFlow(p, null)[0];
+    assert.notEqual(legacy.frictionLoss, result.frictionLoss);
+  });
+  test('Pump curve interpolation finds the system intersection and NPSH screen stays positive', () => {
+    const duty = advanced.findPumpDutyPoint([{ flowLps:0, headM:40 }, { flowLps:4, headM:20 }], 10, 10, 2);
+    assert.ok(duty && duty.flowLps > 2 && duty.flowLps < 3); close(duty.headM, 10 + 10 * (duty.flowLps / 2) ** 2, 1e-8);
+    assert.ok(advanced.calculateNpshAvailable(10, 20, 2) > 0);
+  });
+  test('Daily rainwater tank sweep compares spillage order and hot-water recovery losses', () => {
+    const sweep = advanced.simulateDailyRainwater({ rainfallMm:[10,10], roofAreaM2:100, runoffCoefficient:1, efficiencyPct:100, firstFlushMm:0, demandM3Day:0.5, tankSizesM3:[1] });
+    close(sweep.yieldAfterSpillage[0].suppliedM3, 1); close(sweep.yieldAfterSpillage[0].overflowM3, 0.5);
+    close(sweep.yieldBeforeSpillage[0].overflowM3, 0);
+    const hw = advanced.calculateHotWaterRecirculation(100, 10, 1, 2); close(hw.heatLossKWhDay, 24); close(hw.recoveryMarginKWhDay, -22);
+    close(advanced.estimatePumpStartsPerHour(24, 1), 1);
+  });
+  test('EPANET export preserves entered links and labels boundary data as provisional', () => {
+    const inp = advanced.exportEpanetInp([{ id:'1', label:'main', fromNode:'Tank A', toNode:'Block 1', length:20, internalDiameter:32, hazenWilliamsC:140, inletHead:15, elevationDifference:2, flow:0.5 }], [{ node:'Block 1', flowLps:0.25 }]);
+    assert.match(inp, /Tank_A 0/); assert.match(inp, /Block_1 0 0\.2500/); assert.match(inp, /P1 Tank_A Block_1 20\.000/); assert.match(inp, /boundary head intentionally set to 0 pending user input/);
+    const darcy = advanced.exportEpanetInp([{ id:'D', label:'Darcy', fromNode:'S', toNode:'T', length:20, internalDiameter:32, hazenWilliamsC:140, inletHead:15, elevationDifference:2, flow:0.5, lossMethod:'Darcy-Weisbach', roughnessMm:0.02, minorLossK:1 }]);
+    assert.match(darcy, /HEADLOSS D-W/); assert.match(darcy, /20\.000 32\.000 0\.020 1 OPEN/);
   });
   test('Empty project starts without sample consumption or a startup crash', () => {
     const r = e.calculateAll(createEmptyProject()); close(r.add.finalADD, 0); assert.equal(r.peakFlow, null); assert.notEqual(r.overallStatus, 'PASS');
@@ -81,6 +144,11 @@ try {
   test('JSON round-trip and legacy migration', () => {
     const p = createSampleProject(); assert.deepEqual(parseProject(JSON.parse(JSON.stringify(p))), p);
     delete p.demandBasis; delete p.peakDesign; assert.equal(parseProject(p).demandBasis.maxDayFactor, 1.5);
+    delete p.advancedDesign; assert.ok(parseProject(p).advancedDesign?.rainwaterDaily);
+    for (const key of ['lossMethod','roughnessMm','minorLossK','fromNode','toNode','minimumVelocity']) delete p.pipes[0][key];
+    assert.equal(parseProject(p).pipes[0].lossMethod, 'Hazen-Williams');
+    const invalid = createSampleProject(); invalid.advancedDesign.rainwaterDaily.dailyRainfallMm = [0, -1]; assert.throws(() => parseProject(invalid));
+    const invalidProfile = createSampleProject(); invalidProfile.advancedDesign.stochasticDemand.profiles = [null]; assert.throws(() => parseProject(invalidProfile));
   });
   test('Department schedules replace occupancy and average demand across operating days', () => {
     const p = createEmptyProject(); p.departmentDemand.enabled = true;

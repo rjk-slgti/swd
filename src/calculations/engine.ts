@@ -37,6 +37,7 @@ import type {
   CalcRegisterEntry,
   ChecklistItem,
 } from '@/types';
+import { calculateDarcyWeisbach, solveTreeBranchFlows } from '@/calculations/advancedEngineering';
 
 // --- Utility helpers ---
 
@@ -554,8 +555,18 @@ export function calculatePipeFlow(
   data: ProjectData,
   peakFlow: PeakFlowResult | null
 ): PipeResult[] {
+  let branchFlows = new Map<string, number>();
+  if (data.advancedDesign?.networkTerminalDemands.length) {
+    try {
+      const connected = data.pipes.filter(pipe => pipe.fromNode?.trim() && pipe.toNode?.trim()).map(pipe => ({ id: pipe.id, from: pipe.fromNode!, to: pipe.toNode! }));
+      const solved = solveTreeBranchFlows(connected, data.advancedDesign.networkTerminalDemands, data.advancedDesign.networkSourceNode);
+      branchFlows = new Map(solved.edgeFlows.map(edge => [edge.edgeId, edge.flowLps]));
+    } catch {
+      // Invalid or looped optional network input must not stop baseline design calculations.
+    }
+  }
   return data.pipes.map((pipe) => {
-    const flow = pipe.flow > 0 ? pipe.flow : (peakFlow?.probablePeakFlow || 0);
+    const flow = pipe.flow > 0 ? pipe.flow : (branchFlows.get(pipe.id) ?? peakFlow?.probablePeakFlow ?? 0);
     const d = safeDiv(pipe.internalDiameter, 1000); // mm to m
     const area = safeMul(Math.PI, safeMul(d, d)) / 4;
     const velocity = safeDiv(flow / 1000, area); // m/s
@@ -564,20 +575,28 @@ export function calculatePipeFlow(
     const C = pipe.hazenWilliamsC;
     const Qm3s = flow / 1000;
     let frictionLoss = 0;
-    if (d > 0 && C > 0 && flow > 0) {
+    let minorLoss = pipe.fittingLoss;
+    if (pipe.lossMethod === 'Darcy-Weisbach' && d > 0 && flow > 0) {
+      const advanced = calculateDarcyWeisbach(flow, pipe.internalDiameter, pipe.length, pipe.roughnessMm ?? 0.15, pipe.minorLossK ?? 0);
+      frictionLoss = advanced.frictionLossM;
+      minorLoss += advanced.minorLossM;
+    } else if (d > 0 && C > 0 && flow > 0) {
       frictionLoss = safeDiv(
         10.67 * Math.pow(pipe.length, 1) * Math.pow(Qm3s, 1.852),
         Math.pow(C, 1.852) * Math.pow(d, 4.87)
       );
     }
 
-    const totalPressureLoss = frictionLoss + pipe.fittingLoss;
+    const totalPressureLoss = frictionLoss + minorLoss;
     const availablePressure = pipe.inletHead - pipe.elevationDifference;
     const residualPressure = availablePressure - totalPressureLoss;
 
     const warnings: string[] = [];
     if (velocity > pipe.maxVelocity) {
       warnings.push(`Velocity (${roundTo(velocity, 2)} m/s) exceeds the design criterion (${pipe.maxVelocity} m/s); review noise, erosion and transient surge risks.`);
+    }
+    if ((pipe.minimumVelocity ?? 0) > 0 && velocity < (pipe.minimumVelocity ?? 0)) {
+      warnings.push(`Velocity (${roundTo(velocity, 2)} m/s) is below the user-entered review threshold (${pipe.minimumVelocity} m/s); review oversizing and stagnation risk for this operating case.`);
     }
     if (d <= 0 || C <= 0 || flow <= 0) {
       warnings.push('Additional design information required: positive diameter, roughness coefficient and design flow.');
@@ -1275,6 +1294,34 @@ export function generateWarnings(
         recommendedAction: 'Increase internal pipe diameter to reduce flow velocity.',
         source: 'WPSF-PIP-01',
         classification: 'PROTOTYPE STANDARD FACTOR',
+      });
+    }
+    if ((p.pipe.minimumVelocity ?? 0) > 0 && p.velocity < (p.pipe.minimumVelocity ?? 0)) {
+      warnings.push({
+        id: `WRN-PIP-LOW-${idx}`,
+        level: 'warning',
+        message: `Velocity below the user-entered review threshold in ${p.pipe.label}`,
+        section: 'Pipework Design',
+        currentValue: `${roundTo(p.velocity, 2)} m/s`,
+        referenceValue: `≥ ${p.pipe.minimumVelocity} m/s (project-entered screening value)`,
+        whyItMatters: 'Review operating patterns, potential oversizing and low-use branches with the project engineer.',
+        recommendedAction: 'Verify the minimum velocity criterion and review the pipe size and operating pattern.',
+        source: 'User-entered review threshold',
+        classification: 'ENGINEERING ASSUMPTION',
+      });
+    }
+    if (p.pipe.fromNode?.trim() && p.pipe.toNode?.trim() && p.pipe.flow <= 0 && !(data.peakDesign.verified && data.peakDesign.flow > 0)) {
+      warnings.push({
+        id: `WRN-PIP-FLOW-${idx}`,
+        level: 'warning',
+        message: `No design flow is assigned to connected reach ${p.pipe.label}`,
+        section: 'Pipework Design',
+        currentValue: '0 L/s',
+        referenceValue: 'User-entered terminal demand or confirmed peak flow',
+        whyItMatters: 'An unassessed low-use reach may retain water; review the operating case and stagnation risk.',
+        recommendedAction: 'Enter a reach flow or a connected tree demand and verify the peak-flow basis.',
+        source: 'Project input review',
+        classification: 'VERIFICATION REQUIRED',
       });
     }
     if (p.residualPressure < 10) {

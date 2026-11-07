@@ -4,12 +4,14 @@ import {
   SectionHeader,
   NumberInput,
   TextInput,
+  SelectInput,
   DataTable,
   EduCard,
   StudentCalculationCard,
   VisualHydraulicGradient,
 } from './ui';
 import type { PipeDesign } from '@/types';
+import { exportEpanetInp, findLowestLossPaths, solveTreeBranchFlows } from '@/calculations/advancedEngineering';
 
 export function StepPipeDesign() {
   const { project, setProject, results } = useProject();
@@ -25,6 +27,20 @@ export function StepPipeDesign() {
 
   const primaryPipe = results.pipes[0];
   const primaryFlow = primaryPipe ? getPipeFlow(primaryPipe.pipe) : 0;
+  const networkEdges = results.pipes.filter(r => r.pipe.fromNode?.trim() && r.pipe.toNode?.trim()).map(r => ({ id: r.pipe.id, label: r.pipe.label, from: r.pipe.fromNode!, to: r.pipe.toNode!, lossM: r.totalPressureLoss }));
+  const criticalPaths = networkEdges.length ? findLowestLossPaths(networkEdges, networkEdges[0].from) : [];
+  const networkConfig = project.advancedDesign;
+  let branchFlow: ReturnType<typeof solveTreeBranchFlows> | null = null;
+  let branchFlowError = '';
+  try { if (networkConfig?.networkTerminalDemands.length && networkEdges.length) branchFlow = solveTreeBranchFlows(networkEdges.map(e => ({ id: e.id, from: e.from, to: e.to })), networkConfig.networkTerminalDemands, networkConfig.networkSourceNode); }
+  catch (error) { branchFlowError = error instanceof Error ? error.message : 'Could not solve this branch tree.'; }
+  const updateNetwork = (patch: Partial<NonNullable<typeof networkConfig>>) => setProject(current => ({ ...current, advancedDesign: { ...current.advancedDesign!, ...patch } }));
+
+  const downloadEpanet = () => {
+    const file = new Blob([exportEpanetInp(project.pipes, project.advancedDesign?.networkTerminalDemands)], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(file);
+    const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${project.projectInfo.projectName || 'water-network'}-preliminary.inp`; anchor.click(); URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
@@ -71,7 +87,7 @@ export function StepPipeDesign() {
                 velocity={r.velocity}
                 inletHeadM={r.pipe.inletHead}
                 frictionLossM={r.frictionLoss}
-                fittingLossM={r.pipe.fittingLoss}
+                fittingLossM={r.totalPressureLoss - r.frictionLoss}
                 elevationDifferenceM={r.pipe.elevationDifference}
                 residualPressureM={r.residualPressure}
                 minRequiredResidualM={10}
@@ -82,7 +98,7 @@ export function StepPipeDesign() {
       )}
 
       {/* Student Step-by-Step Mathematical Walkthrough */}
-      {primaryPipe && (
+      {primaryPipe && primaryPipe.pipe.lossMethod !== 'Darcy-Weisbach' && (
         <StudentCalculationCard
           title="Student Pedagogical Walkthrough: Hazen-Williams Hydraulic Sizing"
           standardRef="BS EN 806-3 / CIBSE Guide G / EPA EPANET"
@@ -148,22 +164,26 @@ export function StepPipeDesign() {
 
       {/* Configuration Cards */}
       <div className="space-y-4">
-        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
-          Pipe Reach Sizing Parameters
-        </h3>
+        <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Pipe Reach Sizing Parameters</h3><button type="button" onClick={downloadEpanet} disabled={!project.pipes.length} className="min-h-10 rounded-lg border border-indigo-200 bg-indigo-50 px-3 text-xs font-semibold text-indigo-800 disabled:opacity-50">Export EPANET .inp skeleton</button></div>
+        <p className="text-xs text-amber-800">The EPANET file is a preliminary skeleton with entered tree demands. Elevations and boundary conditions are placeholders. Mixed pipe methods export as Hazen–Williams for the file; verify the method, connectivity and all inputs before independent analysis.</p>
         {project.pipes.map((pipe, index) => (
           <Card key={pipe.id}>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
               <TextInput label="Pipe / Reach Identifier" value={pipe.label} onChange={(label) => update(pipe.id, { label })} />
               <TextInput label="Pipe material (for identification)" value={pipe.material} onChange={(material) => update(pipe.id, { material })} />
+              <SelectInput label="Friction method" value={pipe.lossMethod ?? 'Hazen-Williams'} onChange={(lossMethod: string) => update(pipe.id, { lossMethod: lossMethod as PipeDesign['lossMethod'] })} options={['Hazen-Williams', 'Darcy-Weisbach']} />
               <NumberInput id={`pipe-${index}-diameter`} label="Inside diameter" unit="mm" tooltip="The clear opening inside the pipe. Use the product data for the selected pipe." value={pipe.internalDiameter} onChange={(internalDiameter) => update(pipe.id, { internalDiameter })} />
               <NumberInput label="Pipe length" unit="m" tooltip="Measured length along this pipe reach." value={pipe.length} onChange={(length) => update(pipe.id, { length })} />
               <NumberInput label="Water flow (0 uses accepted peak flow)" unit="L/s" step={0.01} value={pipe.flow} onChange={(flow) => update(pipe.id, { flow })} />
               <NumberInput label="Pipe roughness coefficient (Hazen–Williams C)" unit="—" min={1} tooltip="Engineering coefficient used to estimate friction loss. Confirm it from an applicable project source; changing the material name does not change this value." value={pipe.hazenWilliamsC} onChange={(hazenWilliamsC) => update(pipe.id, { hazenWilliamsC })} status="Engineering Assumption" />
+              {pipe.lossMethod === 'Darcy-Weisbach' && <><NumberInput label="Absolute roughness" unit="mm" min={0} step={0.001} value={pipe.roughnessMm ?? 0.15} onChange={(roughnessMm) => update(pipe.id, { roughnessMm })} tooltip="Enter the pipe manufacturer's or project source roughness. The default is an editable assumption." /><NumberInput label="Minor-loss coefficient K" unit="—" min={0} step={0.1} value={pipe.minorLossK ?? 0} onChange={(minorLossK) => update(pipe.id, { minorLossK })} tooltip="Sum the K values for fittings on this reach from a verified source." /></>}
+              <TextInput label="From node (network path)" value={pipe.fromNode ?? ''} onChange={(fromNode) => update(pipe.id, { fromNode })} />
+              <TextInput label="To node (network path)" value={pipe.toNode ?? ''} onChange={(toNode) => update(pipe.id, { toNode })} />
               <NumberInput label="Pressure head available at inlet" unit="m" tooltip="Available water pressure expressed as metres of water head." value={pipe.inletHead} onChange={(inletHead) => update(pipe.id, { inletHead })} />
               <NumberInput label="Height change (uphill is positive)" unit="m" min={-10000} tooltip="Elevation difference from the inlet to the end of this reach. Enter a negative value for a lower outlet." value={pipe.elevationDifference} onChange={(elevationDifference) => update(pipe.id, { elevationDifference })} />
               <NumberInput label="Extra head loss through fittings" unit="m" tooltip="Combined allowance for bends, valves, and other local restrictions." value={pipe.fittingLoss} onChange={(fittingLoss) => update(pipe.id, { fittingLoss })} />
               <NumberInput label="Maximum flow speed (velocity)" unit="m/s" step={0.1} tooltip="Project-selected upper limit for the calculated water speed in this reach." value={pipe.maxVelocity} onChange={(maxVelocity) => update(pipe.id, { maxVelocity })} status="User Defined" />
+              <NumberInput label="Optional minimum review velocity" unit="m/s" min={0} step={0.1} tooltip="Optional project-specific low-velocity review threshold. Zero disables this screening check; set it only with an approved project basis." value={pipe.minimumVelocity ?? 0} onChange={(minimumVelocity) => update(pipe.id, { minimumVelocity })} status="User Defined" />
               <div className="lg:col-span-2">
                 <TextInput label="Design Basis / Standard Source" value={pipe.source} onChange={(source) => update(pipe.id, { source })} />
               </div>
@@ -200,6 +220,7 @@ export function StepPipeDesign() {
                 hazenWilliamsC: 140,
                 maxVelocity: 2,
                 source: 'Preliminary engineering allowance; verify material and pressure data',
+                lossMethod: 'Hazen-Williams', roughnessMm: 0.15, minorLossK: 0, fromNode: '', toNode: '',
               },
             ],
           }))
@@ -212,17 +233,28 @@ export function StepPipeDesign() {
       <Card>
         <h3 className="text-sm font-semibold text-slate-800 mb-3">Hydraulic Reach Summary Table</h3>
         <DataTable
-          headers={['Reach Label', 'Material', 'Velocity (m/s)', 'Friction Loss (m)', 'Fitting Loss (m)', 'Residual Head (m)', 'Hydraulic Check']}
+          headers={['Reach Label', 'Material', 'Velocity (m/s)', 'Friction Loss (m)', 'Fitting & local loss (m)', 'Residual Head (m)', 'Hydraulic Check']}
           rows={results.pipes.map((r) => [
             r.pipe.label,
             r.pipe.material,
             r.velocity.toFixed(2),
             r.frictionLoss.toFixed(2),
-            r.pipe.fittingLoss.toFixed(2),
+            (r.totalPressureLoss - r.frictionLoss).toFixed(2),
             r.residualPressure.toFixed(2),
             r.warnings.join(' ') || 'Passes Velocity & Residual Head Criteria',
           ])}
         />
+      </Card>
+
+      {primaryPipe?.pipe.lossMethod === 'Darcy-Weisbach' && <Card><h3 className="text-sm font-semibold text-slate-800">Darcy–Weisbach method selected</h3><p className="mt-1 text-xs text-slate-700">Friction head loss is calculated as <code>f × (L/D) × v²/(2g)</code>, with a Swamee–Jain turbulent friction-factor estimate and laminar 64/Re relation. Entered K values add local losses. The Hazen–Williams walkthrough is hidden for this reach so its equations are not mistaken for the selected method.</p><p className="mt-2 text-xs">Primary reach friction loss: <strong>{primaryPipe.frictionLoss.toFixed(3)} m</strong>; local and specified fitting losses: <strong>{(primaryPipe.totalPressureLoss-primaryPipe.frictionLoss).toFixed(3)} m</strong>.</p></Card>}
+
+      <Card>
+        <h3 className="text-sm font-semibold text-slate-800 mb-2">Network path check</h3>
+        <p className="text-xs text-slate-600">Enter From and To node names on each reach. The path check finds minimum head-loss paths. The optional tree flow screen sums entered terminal demands upstream; it does not solve pressure-dependent or looped networks.</p>
+        {criticalPaths.length ? <DataTable headers={['Terminal node', 'Reach path', 'Accumulated head loss (m)']} rows={criticalPaths.map(path => [path.node, path.edgeIds.map(id => networkEdges.find(edge => edge.id === id)?.label ?? id).join(' → '), path.headLossM.toFixed(2)])} /> : <p className="mt-2 text-xs text-slate-500">Add connected node names to at least one reach to view paths.</p>}
+        {networkConfig && <div className="mt-3 grid gap-3 md:grid-cols-2"><TextInput label="Network source node" value={networkConfig.networkSourceNode} onChange={networkSourceNode => updateNetwork({ networkSourceNode })} /><div><label htmlFor="network-terminal-demands" className="mb-1 block text-xs font-medium text-slate-700">Terminal demands (node, L/s; one per line)</label><textarea id="network-terminal-demands" rows={3} value={networkConfig.networkTerminalDemands.map(item => `${item.node}, ${item.flowLps}`).join('\n')} onChange={event => { const lines = event.target.value.split(/\r?\n/).filter(line => line.trim()); const demands = lines.map(line => { const [node, flow] = line.split(/[;,]/); return { node: node.trim(), flowLps: Number(flow) }; }); if (demands.every(item => item.node && Number.isFinite(item.flowLps) && item.flowLps >= 0)) updateNetwork({ networkTerminalDemands: demands }); }} className="w-full rounded-lg border border-slate-300 p-2 font-mono text-xs" /></div></div>}
+        {branchFlow && <p className="mt-2 text-xs text-blue-800">Tree demand total: <strong>{branchFlow.totalDemandLps.toFixed(2)} L/s</strong> · {branchFlow.edgeFlows.map(item => `${networkEdges.find(edge => edge.id === item.edgeId)?.label ?? item.edgeId}: ${item.flowLps.toFixed(2)} L/s`).join(' · ')}</p>}
+        {branchFlowError && <p role="alert" className="mt-2 text-xs text-amber-800">{branchFlowError}</p>}
       </Card>
 
       {/* Critical Index Fixture Assessment */}
