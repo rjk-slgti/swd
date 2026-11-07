@@ -151,12 +151,12 @@ export function StepPipeDesign() {
         <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
           Pipe Reach Sizing Parameters
         </h3>
-        {project.pipes.map((pipe) => (
+        {project.pipes.map((pipe, index) => (
           <Card key={pipe.id}>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
               <TextInput label="Pipe / Reach Identifier" value={pipe.label} onChange={(label) => update(pipe.id, { label })} />
               <TextInput label="Pipe material (for identification)" value={pipe.material} onChange={(material) => update(pipe.id, { material })} />
-              <NumberInput label="Inside diameter" unit="mm" tooltip="The clear opening inside the pipe. Use the product data for the selected pipe." value={pipe.internalDiameter} onChange={(internalDiameter) => update(pipe.id, { internalDiameter })} />
+              <NumberInput id={`pipe-${index}-diameter`} label="Inside diameter" unit="mm" tooltip="The clear opening inside the pipe. Use the product data for the selected pipe." value={pipe.internalDiameter} onChange={(internalDiameter) => update(pipe.id, { internalDiameter })} />
               <NumberInput label="Pipe length" unit="m" tooltip="Measured length along this pipe reach." value={pipe.length} onChange={(length) => update(pipe.id, { length })} />
               <NumberInput label="Water flow (0 uses accepted peak flow)" unit="L/s" step={0.01} value={pipe.flow} onChange={(flow) => update(pipe.id, { flow })} />
               <NumberInput label="Pipe roughness coefficient (Hazen–Williams C)" unit="—" min={1} tooltip="Engineering coefficient used to estimate friction loss. Confirm it from an applicable project source; changing the material name does not change this value." value={pipe.hazenWilliamsC} onChange={(hazenWilliamsC) => update(pipe.id, { hazenWilliamsC })} status="Engineering Assumption" />

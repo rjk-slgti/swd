@@ -1,11 +1,11 @@
 import { AlertTriangle, ArrowUpRight, CheckCircle2 } from 'lucide-react';
 import type { EngineeringWarning } from '@/types';
-import { getIssueStepId } from '@/utils/designIssueRouting';
+import { getIssueFieldId, getIssueStepId } from '@/utils/designIssueRouting';
 import { getStepById } from '@/data/workflowPhases';
 
 interface DesignIssuesPanelProps {
   warnings: EngineeringWarning[];
-  onSelectStep: (stepId: string) => void;
+  onSelectStep: (stepId: string, fieldId?: string) => void;
   variant?: 'light' | 'dark';
   limit?: number;
 }
@@ -54,6 +54,7 @@ export function DesignIssuesPanel({ warnings, onSelectStep, variant = 'light', l
         <ul className="space-y-2">
           {visibleWarnings.map((warning) => {
             const stepId = getIssueStepId(warning.section);
+            const fieldId = getIssueFieldId(warning.id);
             const step = getStepById(stepId);
             const level = getIssueLevel(warning.level);
             const nextStep = warning.recommendedAction || `Review ${warning.section} inputs and verify the entered value and its source.`;
@@ -68,7 +69,21 @@ export function DesignIssuesPanel({ warnings, onSelectStep, variant = 'light', l
               <li key={warning.id}>
                 <button
                   type="button"
-                  onClick={() => onSelectStep(stepId)}
+                  onClick={() => {
+                    onSelectStep(stepId, fieldId);
+                    if (!fieldId) return;
+                    let attempts = 0;
+                    const focusField = () => {
+                      const field = document.getElementById(fieldId);
+                      if (field instanceof HTMLElement) {
+                        field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        field.focus({ preventScroll: true });
+                      } else if (attempts++ < 20) {
+                        window.setTimeout(focusField, 25);
+                      }
+                    };
+                    window.setTimeout(focusField, 0);
+                  }}
                   className={`w-full rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${tone}`}
                   aria-label={`Open ${step?.label ?? 'overview'} to review ${warning.section}: ${warning.recommendedAction || warning.message}`}
                 >
@@ -77,7 +92,7 @@ export function DesignIssuesPanel({ warnings, onSelectStep, variant = 'light', l
                       {level} · {warning.section}
                     </span>
                     <span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${isDark ? 'text-cyan-300' : 'text-blue-700'}`}>
-                      Review {step?.shortLabel ?? 'Overview'} <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+                      Review {fieldId ? 'field' : step?.shortLabel ?? 'Overview'} <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
                     </span>
                   </span>
                   <span className={`mt-1 block text-sm font-semibold leading-snug ${textTone}`}>{warning.message}</span>

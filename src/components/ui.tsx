@@ -159,6 +159,7 @@ export function EduCard({ title, icon = 'why', children, defaultOpen = false }: 
 // ============================================================
 
 interface NumberInputProps {
+  id?: string;
   label: string;
   value: number;
   onChange: (value: number) => void;
@@ -174,6 +175,7 @@ interface NumberInputProps {
 }
 
 export function NumberInput({
+  id,
   label,
   value,
   onChange,
@@ -225,7 +227,7 @@ export function NumberInput({
   return (
     <div className="space-y-1">
       <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
-        <label className="block min-w-0 flex-1 text-sm font-medium text-slate-700 break-words" title={tooltip}>
+        <label htmlFor={id} className="block min-w-0 flex-1 text-sm font-medium text-slate-700 break-words" title={tooltip}>
           {label}
         </label>
         <span className="inline-flex items-center gap-2">
@@ -235,6 +237,7 @@ export function NumberInput({
       </div>
       <div className="flex min-w-0 flex-wrap items-start gap-2 sm:flex-nowrap sm:items-center">
         <input
+          id={id}
           aria-label={label}
           type="number"
           value={text}
@@ -260,6 +263,7 @@ export function NumberInput({
 }
 
 interface TextInputProps {
+  id?: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -267,7 +271,7 @@ interface TextInputProps {
   tooltip?: string;
 }
 
-export function TextInput({ label, value, onChange, placeholder, tooltip }: TextInputProps) {
+export function TextInput({ id, label, value, onChange, placeholder, tooltip }: TextInputProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useLayoutEffect(() => {
@@ -285,10 +289,11 @@ export function TextInput({ label, value, onChange, placeholder, tooltip }: Text
 
   return (
     <div className="space-y-1">
-      <label className="block text-sm font-medium text-slate-700 break-words" title={tooltip}>
+      <label htmlFor={id} className="block text-sm font-medium text-slate-700 break-words" title={tooltip}>
         {label}
       </label>
       <textarea
+        id={id}
         ref={inputRef}
         rows={1}
         value={value}

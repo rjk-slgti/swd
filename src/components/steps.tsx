@@ -171,7 +171,7 @@ export function StepOccupancy() {
           <div className="md:col-span-5"><TextInput label="Department" value={d.name} onChange={name => setProject(p => ({ ...p, departmentDemand: { ...p.departmentDemand, departments: p.departmentDemand.departments.map((item, j) => j === i ? { ...item, name } : item) } }))} /></div>
           <div className="md:col-span-2"><NumberInput label="People" value={d.population} onChange={population => setProject(p => ({ ...p, departmentDemand: { ...p.departmentDemand, departments: p.departmentDemand.departments.map((item, j) => j === i ? { ...item, population } : item) } }))} unit="persons" /></div>
           <div className="md:col-span-2"><NumberInput label="Use per person" value={d.rateLPerPersonDay} onChange={rateLPerPersonDay => setProject(p => ({ ...p, departmentDemand: { ...p.departmentDemand, departments: p.departmentDemand.departments.map((item, j) => j === i ? { ...item, rateLPerPersonDay } : item) } }))} unit="L/person/operating day" /></div>
-          <div className="md:col-span-2"><NumberInput label="Operating days" value={d.operatingDaysPerWeek} max={7} onChange={operatingDaysPerWeek => setProject(p => ({ ...p, departmentDemand: { ...p.departmentDemand, departments: p.departmentDemand.departments.map((item, j) => j === i ? { ...item, operatingDaysPerWeek } : item) } }))} unit="days/week" /></div>
+          <div className="md:col-span-2"><NumberInput id={i === 0 ? 'occupancy-operating-days' : undefined} label="Operating days" value={d.operatingDaysPerWeek} max={7} onChange={operatingDaysPerWeek => setProject(p => ({ ...p, departmentDemand: { ...p.departmentDemand, departments: p.departmentDemand.departments.map((item, j) => j === i ? { ...item, operatingDaysPerWeek } : item) } }))} unit="days/week" /></div>
           <div className="md:col-span-1 text-right text-sm font-semibold text-blue-700">{(d.population * d.rateLPerPersonDay * d.operatingDaysPerWeek / 7 / 1000).toFixed(2)} m³/day</div>
         </div>)}<p className="text-xs text-slate-500">Rates are project inputs, not statutory defaults. Department average demand = people × litres/person/operating day × operating days/week ÷ 7.</p></div>}
       </Card>
@@ -250,13 +250,13 @@ export function StepOccupancy() {
                       <TextInput label="Group Name" value={g.name} onChange={(v) => updateGroup(g.id, 'name', v)} />
                     </div>
                     <div className="xl:col-span-1">
-                      <NumberInput label="Count" value={g.count} onChange={(v) => updateGroup(g.id, 'count', v)} unit="persons" />
+                      <NumberInput id={g.id === project.occupancy[0]?.id ? 'occupancy-count' : undefined} label="Count" value={g.count} onChange={(v) => updateGroup(g.id, 'count', v)} unit="persons" />
                     </div>
                     <div className="xl:col-span-2">
                       <NumberInput label="Consumption" value={g.consumptionFactor} onChange={(v) => updateGroup(g.id, 'consumptionFactor', v)} unit="L/person/operating day" />
                     </div>
                     <div className="xl:col-span-1">
-                      <NumberInput label="Days/Week" value={g.daysPerWeek} max={7} onChange={(v) => updateGroup(g.id, 'daysPerWeek', v)} unit="days" />
+                      <NumberInput id={g.id === project.occupancy[0]?.id ? 'occupancy-operating-days' : undefined} label="Days/Week" value={g.daysPerWeek} max={7} onChange={(v) => updateGroup(g.id, 'daysPerWeek', v)} unit="days" />
                     </div>
                     <div className="sm:col-span-2 xl:col-span-2">
                       <div className="text-xs text-slate-500">Daily Demand</div>
@@ -553,13 +553,13 @@ export function StepWaterBalance() {
       </EduCard>
 
       <Card>
-        <div className="flex items-start justify-between gap-4"><div><h3 className="text-sm font-semibold text-slate-700">Water source inventory</h3><p className="mt-1 text-xs text-slate-500">Enter sustainable yield in m³/day for each source. Rainwater is limited by modeled collection and eligible non-potable demand. Proposed sources are included in the design-capacity check.</p></div><button onClick={() => setProject(p => ({ ...p, waterSources: [...p.waterSources, { id: `SRC-${Date.now()}`, name: 'New source', type: 'NWSDB', location: '', status: 'Existing', capacityM3Day: 0, verified: false }] }))} className="shrink-0 rounded-md border border-blue-300 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50">+ Add source</button></div>
+        <div className="flex items-start justify-between gap-4"><div><h3 className="text-sm font-semibold text-slate-700">Water source inventory</h3><p className="mt-1 text-xs text-slate-500">Enter sustainable yield in m³/day for each source. Rainwater is limited by modeled collection and eligible non-potable demand. Proposed sources are included in the design-capacity check.</p></div><button id={project.waterSources.length === 0 ? 'water-source-capacity' : undefined} onClick={() => setProject(p => ({ ...p, waterSources: [...p.waterSources, { id: `SRC-${Date.now()}`, name: 'New source', type: 'NWSDB', location: '', status: 'Existing', capacityM3Day: 0, verified: false }] }))} className="shrink-0 rounded-md border border-blue-300 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50">+ Add source</button></div>
         <div className="mt-4 space-y-2">{project.waterSources.length === 0 && <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">No source capacities entered. The supply adequacy result cannot be confirmed until sources and their sustainable yields are added.</p>}{project.waterSources.map((s, i) => <div key={s.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end rounded-lg bg-slate-50 p-3">
           <div className="md:col-span-2"><TextInput label="Source name" value={s.name} onChange={name => setProject(p => ({ ...p, waterSources: p.waterSources.map((x, j) => j === i ? { ...x, name } : x) }))} /></div>
           <div className="md:col-span-2"><SelectInput label="Source type" value={s.type} options={['NWSDB', 'Tube Well', 'Rainwater Harvesting', 'Other']} onChange={type => setProject(p => ({ ...p, waterSources: p.waterSources.map((x, j) => j === i ? { ...x, type: type as typeof x.type } : x) }))} /></div>
           <div className="md:col-span-2"><TextInput label="Location / block" value={s.location} onChange={location => setProject(p => ({ ...p, waterSources: p.waterSources.map((x, j) => j === i ? { ...x, location } : x) }))} /></div>
           <div className="md:col-span-2"><SelectInput label="Status" value={s.status} options={['Existing', 'Proposed']} onChange={status => setProject(p => ({ ...p, waterSources: p.waterSources.map((x, j) => j === i ? { ...x, status: status as typeof x.status } : x) }))} /></div>
-          <div className="md:col-span-2"><NumberInput label="Sustainable yield" value={s.capacityM3Day} onChange={capacityM3Day => setProject(p => ({ ...p, waterSources: p.waterSources.map((x, j) => j === i ? { ...x, capacityM3Day } : x) }))} unit="m³/day" /></div>
+          <div className="md:col-span-2"><NumberInput id={i === 0 ? 'water-source-capacity' : undefined} label="Sustainable yield" value={s.capacityM3Day} onChange={capacityM3Day => setProject(p => ({ ...p, waterSources: p.waterSources.map((x, j) => j === i ? { ...x, capacityM3Day } : x) }))} unit="m³/day" /></div>
           <div className="md:col-span-1"><ToggleInput label="Verified" checked={s.verified} onChange={verified => setProject(p => ({ ...p, waterSources: p.waterSources.map((x, j) => j === i ? { ...x, verified } : x) }))} /></div>
           <div className="md:col-span-1 text-right"><button onClick={() => setProject(p => ({ ...p, waterSources: p.waterSources.filter(x => x.id !== s.id) }))} className="text-xs text-red-600 hover:text-red-800">Remove</button></div>
         </div>)}</div>
@@ -771,7 +771,7 @@ export function StepPeakDemand() {
 
       <Card>
         <div className="grid md:grid-cols-2 gap-4">
-          <NumberInput label="Externally calculated peak flow" unit="L/s" step={0.01} value={project.peakDesign.flow} onChange={v => setProject(p => ({ ...p, peakDesign: { ...p.peakDesign, flow: v, verified: false } }))} />
+          <NumberInput id="peak-design-flow" label="Externally calculated peak flow" unit="L/s" step={0.01} value={project.peakDesign.flow} onChange={v => setProject(p => ({ ...p, peakDesign: { ...p.peakDesign, flow: v, verified: false } }))} />
           <TextInput label="Standard / table / calculation reference" value={project.peakDesign.source} onChange={v => setProject(p => ({ ...p, peakDesign: { ...p.peakDesign, source: v, verified: false } }))} />
         </div>
         <label className="flex gap-2 text-sm mt-4"><input type="checkbox" checked={project.peakDesign.verified} onChange={e => setProject(p => ({ ...p, peakDesign: { ...p.peakDesign, verified: e.target.checked } }))} />I have checked this flow against the selected design method and fixture schedule.</label>
@@ -918,7 +918,7 @@ export function StepStorage() {
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
-          <NumberInput label="Underground Tank %" value={project.storage.undergroundTankPct} onChange={(v) => setProject((p) => ({ ...p, storage: { ...p.storage, undergroundTankPct: v } }))} unit="%" />
+          <NumberInput id="storage-split-percent" label="Underground Tank %" value={project.storage.undergroundTankPct} onChange={(v) => setProject((p) => ({ ...p, storage: { ...p.storage, undergroundTankPct: v } }))} unit="%" />
           <NumberInput label="Roof Tank %" value={project.storage.roofTankPct} onChange={(v) => setProject((p) => ({ ...p, storage: { ...p.storage, roofTankPct: v } }))} unit="%" />
           <NumberInput label="Ground Level Tank %" value={project.storage.groundTankPct} onChange={(v) => setProject((p) => ({ ...p, storage: { ...p.storage, groundTankPct: v } }))} unit="%" />
           <NumberInput label="Elevated Tank %" value={project.storage.elevatedTankPct} onChange={(v) => setProject((p) => ({ ...p, storage: { ...p.storage, elevatedTankPct: v } }))} unit="%" />
@@ -1054,13 +1054,13 @@ export function StepStorage() {
           </Card>
 
           <Card>
-            <div className="flex items-start justify-between gap-4"><div><h3 className="text-sm font-semibold text-slate-700">Tank and storage inventory</h3><p className="mt-1 text-xs text-slate-500">Record each existing or proposed tank by location and usable volume. Usable volume = gross tank volume × usable fraction; dead storage is excluded. Required capacity is compared with the combined inventory.</p></div><button onClick={() => setProject(p => ({ ...p, storageAssets: [...p.storageAssets, { id: `ST-${Date.now()}`, name: 'New tank', location: '', tankType: 'Ground Level', status: 'Existing', grossVolumeM3: 0, usableFractionPct: 90 }] }))} className="shrink-0 rounded-md border border-blue-300 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50">+ Add tank</button></div>
+            <div className="flex items-start justify-between gap-4"><div><h3 className="text-sm font-semibold text-slate-700">Tank and storage inventory</h3><p className="mt-1 text-xs text-slate-500">Record each existing or proposed tank by location and usable volume. Usable volume = gross tank volume × usable fraction; dead storage is excluded. Required capacity is compared with the combined inventory.</p></div><button id="tank-inventory-add" onClick={() => setProject(p => ({ ...p, storageAssets: [...p.storageAssets, { id: `ST-${Date.now()}`, name: 'New tank', location: '', tankType: 'Ground Level', status: 'Existing', grossVolumeM3: 0, usableFractionPct: 90 }] }))} className="shrink-0 rounded-md border border-blue-300 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50">+ Add tank</button></div>
             <div className="mt-4 space-y-2">{project.storageAssets.length === 0 && <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">No tank inventory recorded. Add current and planned tanks to calculate the storage deficit.</p>}{project.storageAssets.map((a, i) => <div key={a.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end rounded-lg bg-slate-50 p-3">
               <div className="md:col-span-2"><TextInput label="Tank name" value={a.name} onChange={name => setProject(p => ({ ...p, storageAssets: p.storageAssets.map((x, j) => j === i ? { ...x, name } : x) }))} /></div>
               <div className="md:col-span-2"><TextInput label="Location / block" value={a.location} onChange={location => setProject(p => ({ ...p, storageAssets: p.storageAssets.map((x, j) => j === i ? { ...x, location } : x) }))} /></div>
               <div className="md:col-span-2"><SelectInput label="Tank location type" value={a.tankType} options={['Underground', 'Ground Level', 'Roof', 'Elevated']} onChange={tankType => setProject(p => ({ ...p, storageAssets: p.storageAssets.map((x, j) => j === i ? { ...x, tankType: tankType as typeof x.tankType } : x) }))} /></div>
               <div className="md:col-span-2"><SelectInput label="Status" value={a.status} options={['Existing', 'Proposed']} onChange={status => setProject(p => ({ ...p, storageAssets: p.storageAssets.map((x, j) => j === i ? { ...x, status: status as typeof x.status } : x) }))} /></div>
-              <div className="md:col-span-2"><NumberInput label="Gross volume" value={a.grossVolumeM3} onChange={grossVolumeM3 => setProject(p => ({ ...p, storageAssets: p.storageAssets.map((x, j) => j === i ? { ...x, grossVolumeM3 } : x) }))} unit="m³" /></div>
+              <div className="md:col-span-2"><NumberInput id={i === 0 ? 'tank-inventory-volume' : undefined} label="Gross volume" value={a.grossVolumeM3} onChange={grossVolumeM3 => setProject(p => ({ ...p, storageAssets: p.storageAssets.map((x, j) => j === i ? { ...x, grossVolumeM3 } : x) }))} unit="m³" /></div>
               <div className="md:col-span-1"><NumberInput label="Usable" value={a.usableFractionPct} onChange={usableFractionPct => setProject(p => ({ ...p, storageAssets: p.storageAssets.map((x, j) => j === i ? { ...x, usableFractionPct } : x) }))} unit="%" /></div>
               <div className="md:col-span-1 text-right"><button onClick={() => setProject(p => ({ ...p, storageAssets: p.storageAssets.filter(x => x.id !== a.id) }))} className="text-xs text-red-600 hover:text-red-800">Remove</button><div className="mt-1 text-xs text-slate-600">{(a.grossVolumeM3 * a.usableFractionPct / 100).toFixed(2)} m³ usable</div></div>
             </div>)}</div>
@@ -1125,7 +1125,7 @@ export function StepPumpDesign() {
 
       <Card>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <NumberInput label="Required Flow" value={p.requiredFlow} onChange={(v) => update('requiredFlow', v)} unit="L/s" tooltip="Leave 0 to auto-use peak flow" />
+          <NumberInput id="pump-flow" label="Required Flow" value={p.requiredFlow} onChange={(v) => update('requiredFlow', v)} unit="L/s" tooltip="Leave 0 to auto-use peak flow" />
           <NumberInput label="Net Static Lift" value={p.staticHead} onChange={(v) => update('staticHead', v)} unit="m" tooltip="Difference between source water level and discharge point. Enter the net elevation lift once; do not add suction and delivery heads separately." />
           <NumberInput label="Pipe Friction" value={p.pipeFriction} onChange={(v) => update('pipeFriction', v)} unit="m" />
           <NumberInput label="Fitting Losses" value={p.fittingLosses} onChange={(v) => update('fittingLosses', v)} unit="m" />
@@ -1466,7 +1466,7 @@ export function StepGreywater() {
         {gw.enabled && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
-              <NumberInput label="Wash Basin Flow" value={gw.washBasinFlow} onChange={(v) => update('washBasinFlow', v)} unit="L/day" />
+              <NumberInput id="greywater-source-volume" label="Wash Basin Flow" value={gw.washBasinFlow} onChange={(v) => update('washBasinFlow', v)} unit="L/day" />
               <NumberInput label="Shower Flow" value={gw.showerFlow} onChange={(v) => update('showerFlow', v)} unit="L/day" />
               <NumberInput label="Laundry Flow" value={gw.laundryFlow} onChange={(v) => update('laundryFlow', v)} unit="L/day" />
               <NumberInput label="Other Sink Flow" value={gw.otherSinkFlow} onChange={(v) => update('otherSinkFlow', v)} unit="L/day" />
@@ -1579,7 +1579,7 @@ export function StepHotWater() {
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <NumberInput label="Cold Water Temp" value={hw.coldWaterTempC} onChange={(v) => update('coldWaterTempC', v)} unit="°C" tooltip="Ambient incoming cold mains temperature" />
-              <NumberInput label="Storage Temp" value={hw.storageTempC} onChange={(v) => update('storageTempC', v)} unit="°C" tooltip="Must be ≥60°C for Legionella control" />
+              <NumberInput id="hotwater-storage-temp" label="Storage Temp" value={hw.storageTempC} onChange={(v) => update('storageTempC', v)} unit="°C" tooltip="Must be ≥60°C for Legionella control" />
               <NumberInput label="Delivery Temp" value={hw.deliveryTempC} onChange={(v) => update('deliveryTempC', v)} unit="°C" tooltip="Target distribution temperature at tap (blended)" />
               <NumberInput label="Heating Recovery" value={hw.heatingTimeHours} onChange={(v) => update('heatingTimeHours', v)} unit="hours" tooltip="Heater recovery period to reheat full storage volume" />
             </div>
@@ -1711,7 +1711,7 @@ export function StepFireWater() {
             <TextInput label="Hazard Classification" value={fw.hazardClassification} onChange={(v) => update('hazardClassification', v)} />
             <NumberInput label="Building Area" value={fw.buildingArea} onChange={(v) => update('buildingArea', v)} unit="m²" />
             <NumberInput label="Building Height" value={fw.buildingHeight} onChange={(v) => update('buildingHeight', v)} unit="m" />
-            <NumberInput label="Required fire flow" value={fw.fireFlow} onChange={(v) => update('fireFlow', v)} unit="L/min" tooltip="Use the flow stated in the project fire strategy or authority direction." source={fw.source} status={fw.classification} />
+            <NumberInput id="fire-flow" label="Required fire flow" value={fw.fireFlow} onChange={(v) => update('fireFlow', v)} unit="L/min" tooltip="Use the flow stated in the project fire strategy or authority direction." source={fw.source} status={fw.classification} />
             <NumberInput label="Required supply duration" value={fw.fireDuration} onChange={(v) => update('fireDuration', v)} unit="hours" tooltip="Use the duration stated in the approved fire strategy or authority direction." />
             <div className="space-y-2">
               <ToggleInput label="Hydrant Required" checked={fw.hydrantRequired} onChange={(v) => update('hydrantRequired', v)} />

@@ -23,3 +23,22 @@ export function getIssueStepId(section: string): string {
   if (value.includes('domestic') || value.includes('average daily') || value.includes('maximum daily') || value.includes('demand')) return 'step3';
   return 'dashboard';
 }
+
+/** Return a stable input anchor for issues whose field is known. */
+export function getIssueFieldId(issueId: string): string | undefined {
+  if (issueId === 'PEAK-MISSING' || issueId === 'WRN-PKF-01') return 'peak-design-flow';
+  if (issueId === 'WRN-OCC-01') return 'occupancy-count';
+  if (issueId === 'STORAGE-SPLIT' || issueId === 'WRN-STR-01') return 'storage-split-percent';
+  if (issueId === 'WRN-STR-02' || issueId === 'TANK-INVENTORY-SHORTFALL') return 'tank-inventory-volume';
+  if (issueId === 'TANK-INVENTORY-MISSING') return 'tank-inventory-add';
+  if (issueId === 'SOURCE-MISSING') return 'water-source-capacity';
+  if (issueId === 'SOURCE-SHORTFALL' || issueId === 'SOURCE-UNVERIFIED' || issueId === 'WRN-BAL-01') return 'water-source-capacity';
+  if (issueId === 'OPERATING-DAYS') return 'occupancy-operating-days';
+  if (issueId === 'GREY-SOURCE') return 'greywater-source-volume';
+  if (issueId === 'WRN-PMP-01' || issueId === 'WRN-PMP-02') return 'pump-flow';
+  if (issueId === 'WRN-HW-01') return 'hotwater-storage-temp';
+  if (issueId === 'WRN-FIR-01' || issueId === 'WRN-FIR-VERIFY') return 'fire-flow';
+  const pipeIssue = issueId.match(/^WRN-PIP-(?:VEL|PRS)-(\d+)$/);
+  if (pipeIssue) return `pipe-${pipeIssue[1]}-diameter`;
+  return undefined;
+}
