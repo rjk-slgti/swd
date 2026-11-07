@@ -39,6 +39,8 @@ import type {
 } from '@/types';
 import { calculateDarcyWeisbach, solveTreeBranchFlows } from '@/calculations/advancedEngineering';
 
+export const ENGINE_METHOD_VERSION = 'SWSD-CALC-1.0';
+
 // --- Utility helpers ---
 
 export function safeDiv(a: number, b: number): number {

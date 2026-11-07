@@ -10,6 +10,7 @@ try {
   const { parseProject } = await server.ssrLoadModule('/src/utils/projectValidation.ts');
   const { getIssueFieldId, getIssueStepId } = await server.ssrLoadModule('/src/utils/designIssueRouting.ts');
   const advanced = await server.ssrLoadModule('/src/calculations/advancedEngineering.ts');
+  const { normalizeProjectHistory } = await server.ssrLoadModule('/src/utils/projectStorage.ts');
   test('Review issues route to the related workflow step', () => {
     assert.equal(getIssueStepId('Water Sources'), 'step5');
     assert.equal(getIssueStepId('Pipework Design'), 'pipes');
@@ -22,6 +23,14 @@ try {
     assert.equal(getIssueFieldId('WRN-PIP-LOW-1'), 'pipe-1-diameter');
     assert.equal(getIssueFieldId('WRN-PIP-PRS-2'), 'pipe-2-diameter');
     assert.equal(getIssueFieldId('UNMAPPED-ISSUE'), undefined);
+  });
+  test('Recovery history keeps valid legacy projects and bounds stored versions', () => {
+    const project = createSampleProject();
+    const entries = Array.from({ length: 22 }, (_, index) => ({ id:String(index), savedAt:'2026-01-01T00:00:00.000Z', label:'Saved', data:project }));
+    entries.splice(3, 0, { id:'invalid', savedAt:'bad', label:'broken', data:{} });
+    const history = normalizeProjectHistory(entries, parseProject);
+    assert.equal(history.length, 20); assert.ok(history.every(entry => entry.data.projectInfo.projectName === project.projectInfo.projectName));
+    assert.deepEqual(normalizeProjectHistory({ bad:true }, parseProject), []);
   });
   test('Advanced fixture simulation is seeded and remains a separate estimate', () => {
     const profiles = [{ fixtureType:'tap', usesPerDay:10, flowLps:0.1, durationSeconds:20 }];

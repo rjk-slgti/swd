@@ -31,7 +31,7 @@ import {
   Activity, Gauge, RotateCcw, Sparkles,
 } from 'lucide-react';
 import type { OccupancyGroup, WorkshopProcess, Fixture, TankDimension, WPSFFactor, SubMeterZone } from '@/types';
-import { calculateAll } from '@/calculations/engine';
+import { calculateAll, ENGINE_METHOD_VERSION } from '@/calculations/engine';
 import { calculateHotWaterRecirculation, calculateNpshAvailable, estimatePumpStartsPerHour, findPumpDutyPoint, simulateDailyRainwater, simulateFixtureDemand } from '@/calculations/advancedEngineering';
 import { DesignIssuesPanel } from '@/components/DesignIssuesPanel';
 
@@ -2166,7 +2166,7 @@ export function StepDesignReview({ onSelectStep }: { onSelectStep: (stepId: stri
 // ============================================================
 
 export function StepReport() {
-  const { project, results, exportJSON } = useProject();
+  const { project, results, exportJSON, versionHistory, restoreVersion } = useProject();
   const [template, setTemplate] = useState<'Student' | 'Client' | 'Engineer'>('Client');
   const currentResults = useMemo(() => calculateAll({ ...project, futureExpansion: { ...project.futureExpansion, enabled: false, percentageGrowth: 0 } }), [project]);
   const templateNotes = {
@@ -2174,6 +2174,11 @@ export function StepReport() {
     Client: 'Plain-language view: review expected demand, storage, reuse potential, and the decisions still to confirm.',
     Engineer: 'Technical view: review calculation outputs, source references, assumptions, and unresolved warnings.',
   };
+  const plainSummary = template === 'Student'
+    ? `This project uses ${results.totalPopulation} people and the entered daily-use assumptions. Daily water demand is calculated separately from peak pipe flow. Review each assumption and compare the formulas before using the estimate.`
+    : template === 'Engineer'
+      ? `Preliminary calculation package for ${project.projectInfo.projectName}. Current status: ${results.overallStatus}. ${results.warnings.length} automated review item(s) are open. Inputs, formula references and source entries are listed below.`
+      : `${project.projectInfo.projectName} is expected to need about ${results.add?.finalADDm3.toFixed(2) ?? '—'} m³ of water per average day. The listed storage and pump values are early planning estimates. Open review items show where project information still needs checking.`;
 
   return (
     <div className="space-y-6">
@@ -2187,6 +2192,8 @@ export function StepReport() {
           </div>
         </div>
         <p className="mt-3 rounded-lg bg-blue-50 p-3 text-xs text-blue-900">{templateNotes[template]}</p>
+        <p className="mt-2 rounded-lg border border-slate-200 bg-white p-3 text-sm leading-relaxed text-slate-800">{plainSummary}</p>
+        <p className="mt-2 text-[11px] font-semibold text-amber-900">Preliminary design only. Populated information does not prove compliance or certify the design; verify by a qualified engineer.</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-lg bg-slate-50 p-3"><div className="text-[11px] text-slate-500">Average daily demand</div><div className="mt-1 text-sm font-bold text-slate-900">{results.add ? `${results.add.finalADDm3.toFixed(2)} m³/day` : 'Not available'}</div></div>
           <div className="rounded-lg bg-slate-50 p-3"><div className="text-[11px] text-slate-500">Storage requirement</div><div className="mt-1 text-sm font-bold text-slate-900">{results.storage ? `${results.storage.requiredCapacity.toFixed(2)} m³` : 'Not available'}</div></div>
@@ -2202,6 +2209,15 @@ export function StepReport() {
           <p className="mt-2 text-[10px] text-slate-500">Current holds future expansion off; Future uses the project’s saved growth assumptions. Both use the existing calculation engine.</p>
         </div>
         <p className="mt-3 text-[10px] text-slate-500">The preview style does not alter the existing PDF, Word, or Excel export formats.</p>
+      </Card>
+
+      <Card>
+        <h3 className="text-sm font-semibold text-slate-700">System schematic and service riser</h3>
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-xs font-semibold text-slate-700" aria-label="Preliminary source to fixture schematic">
+          {['Water source', 'Ground storage', 'Pump', 'Roof storage', 'Fixtures'].map((label, index) => <div key={label} className="flex items-center gap-2"><span className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-3 text-center">{label}<span className="mt-1 block text-[10px] font-normal text-slate-600">{index === 2 && results.pump ? `${results.pump.designFlow.toFixed(2)} L/s · ${results.pump.tdh.toFixed(1)} m` : index === 0 ? `${project.waterSources.length} source(s)` : index === 1 || index === 3 ? `${project.storageAssets.filter(asset => index === 1 ? ['Underground','Ground Level'].includes(asset.tankType) : ['Roof','Elevated'].includes(asset.tankType)).length} tank(s)` : 'Design demand'}</span></span>{index < 4 && <span aria-hidden="true" className="text-blue-400">→</span>}</div>)}
+        </div>
+        <div className="mt-3 flex flex-wrap justify-center gap-2 text-[11px]">{project.rainwater.enabled && <span className="rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-cyan-900">Rainwater → storage</span>}{project.greywater.enabled && <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-900">Greywater treatment → non-potable fixtures</span>}</div>
+        <p className="mt-2 text-center text-[10px] text-slate-500">Conceptual flow only. Confirm actual pipe routing, elevations, isolation, backflow protection and equipment connections on project drawings.</p>
       </Card>
 
       {results.add && (
@@ -2225,6 +2241,51 @@ export function StepReport() {
           </div>
         </Card>
       )}
+
+      <Card>
+        <h3 className="text-sm font-semibold text-slate-700 mb-2">Preliminary equipment schedule</h3>
+        <p className="mb-3 text-[11px] text-slate-500">Planning schedule from entered project data. Confirm equipment selections, quantities, connections and manufacturer data during detailed design.</p>
+        <DataTable headers={['Item', 'Location / arrangement', 'Entered duty or size', 'Status / note']} rows={[
+          ...(results.pump ? [[`Water pump set`, project.pump.arrangement, `${results.pump.designFlow.toFixed(2)} L/s @ ${results.pump.tdh.toFixed(2)} m`, 'Preliminary duty']] : []),
+          ...project.storageAssets.map(asset => [`${asset.name} (${asset.tankType})`, asset.location || 'Not entered', `${asset.grossVolumeM3.toFixed(2)} m³ gross; ${(asset.grossVolumeM3 * asset.usableFractionPct / 100).toFixed(2)} m³ usable`, asset.status]),
+          ...project.tankDimensions.map(tank => [`Tank dimensions: ${tank.label}`, tank.tankType, `${tank.length} × ${tank.width} × ${tank.effectiveDepth} m`, tank.shape]),
+          ...project.pipes.map(pipe => [`Pipe reach: ${pipe.label}`, `${pipe.fromNode || 'From node not entered'} → ${pipe.toNode || 'To node not entered'}`, `${pipe.internalDiameter} mm × ${pipe.length} m`, pipe.lossMethod ?? 'Hazen-Williams']),
+        ]} />
+        {project.storageAssets.length + project.tankDimensions.length + project.pipes.length === 0 && !results.pump && <p className="text-xs text-slate-500">No equipment or pipe items have been entered yet.</p>}
+      </Card>
+
+      <Card>
+        <h3 className="text-sm font-semibold text-slate-700 mb-3">Reuse and demand summary</h3>
+        <BarChart data={[
+          { label: 'Average demand', value: results.add?.finalADDm3 ?? 0, color: 'bg-blue-500' },
+          { label: 'Rainwater offset', value: (results.rainwater?.nonPotableOffset ?? 0) / 1000, color: 'bg-emerald-500' },
+          { label: 'Greywater reuse', value: (results.greywater?.potableWaterReduction ?? 0) / 1000, color: 'bg-indigo-500' },
+        ]} unit="m³/day" />
+        {results.storage && <p className="mt-2 text-xs text-slate-600">Storage capacity is <strong>{results.storage.requiredCapacity.toFixed(2)} m³</strong>; it is shown separately because it is a volume, not a daily flow.</p>}
+      </Card>
+
+      <Card>
+        <h3 className="text-sm font-semibold text-slate-700 mb-3">Review and sign-off record</h3>
+        <div className="grid gap-4 sm:grid-cols-2"><div className="rounded-lg border border-slate-200 p-3"><p className="text-[11px] uppercase text-slate-500">Checked by</p><p className="mt-1 font-semibold text-slate-800">{project.projectInfo.checkedBy || 'Not entered'}</p><p className="mt-6 border-t border-dashed border-slate-300 pt-1 text-[10px] text-slate-500">Signature / date</p></div><div className="rounded-lg border border-slate-200 p-3"><p className="text-[11px] uppercase text-slate-500">Approved by</p><p className="mt-1 font-semibold text-slate-800">{project.projectInfo.approvedBy || 'Not entered'}</p><p className="mt-6 border-t border-dashed border-slate-300 pt-1 text-[10px] text-slate-500">Signature / date</p></div></div>
+        <p className="mt-3 text-[11px] text-amber-900">A populated name or sign-off area does not establish engineering approval or regulatory compliance.</p>
+      </Card>
+
+      <details className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-800">Calculation audit trail ({results.calcRegister.length} entries)</summary>
+        <p className="my-3 text-xs text-slate-600">Method version: {ENGINE_METHOD_VERSION} · Factor register: {project.wpsfVersion}. Formula and source are recorded per calculation entry.</p>
+        <DataTable headers={['ID', 'Section', 'Input', 'Formula', 'Result', 'Unit', 'Source', 'Method version']} rows={results.calcRegister.map(entry => [entry.id, entry.section, entry.input, entry.formula, entry.result, entry.unit, entry.source, ENGINE_METHOD_VERSION])} />
+      </details>
+
+      <details className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-800">Assumptions register ({results.assumptions.length} entries)</summary>
+        <div className="mt-3"><DataTable headers={['Parameter', 'Value', 'Unit', 'Basis', 'Reference', 'Verification']} rows={results.assumptions.map(item => [item.parameter, item.adoptedValue, item.unit, item.basis, item.reference, item.verificationRequired ? 'Required' : 'Not required'])} /></div>
+      </details>
+
+      <Card>
+        <h3 className="text-sm font-semibold text-slate-700 mb-2">Recoverable project versions</h3>
+        <p className="mb-3 text-xs text-slate-500">Stored on this device in IndexedDB. Automatic recovery points are kept at intervals; named saves create a recovery version too.</p>
+        {versionHistory.length ? <ul className="space-y-2">{versionHistory.slice(0, 10).map(version => <li key={version.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 p-3"><div><p className="text-xs font-semibold text-slate-800">{version.label}</p><p className="text-[11px] text-slate-500">{version.data.projectInfo.projectName} · {new Date(version.savedAt).toLocaleString()}</p></div><button type="button" onClick={() => restoreVersion(version.id)} className="min-h-10 rounded-lg border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-800 hover:bg-blue-50">Restore this version</button></li>)}</ul> : <p className="text-xs text-slate-500">No recovery versions yet. Save a named project or continue editing to create one.</p>}
+      </Card>
 
       <Card className="print:hidden">
         <h3 className="text-sm font-semibold text-slate-700 mb-4">Export Options</h3>

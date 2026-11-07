@@ -11,22 +11,36 @@ import type { ProjectData, AllResults, FactorOverride } from '@/types';
 import { createEmptyProject, createSampleProject, defaultWPSFFactors } from '@/data/defaults';
 import { calculateAll } from '@/calculations/engine';
 import { parseProject } from '@/utils/projectValidation';
-import { readProjectRecord, writeProjectRecord } from '@/utils/projectStorage';
+import { normalizeProjectHistory, readProjectRecord, writeProjectRecord } from '@/utils/projectStorage';
 
 const STORAGE_KEY = 'water-services-projects';
 const ACTIVE_KEY = 'water-services-active';
+const HISTORY_KEY = 'water-services-history-v1';
+const LEGACY_HISTORY_KEY = 'swd-project-history-v1';
+const createVersionId = () => typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+
+export interface ProjectVersion { id: string; savedAt: string; label: string; data: ProjectData }
+
+function persistHistory(versions: ProjectVersion[], onFallback: () => void) {
+  void writeProjectRecord(HISTORY_KEY, versions).catch(() => {
+    try { localStorage.setItem(LEGACY_HISTORY_KEY, JSON.stringify(versions.slice(0, 3))); } catch { /* best-effort fallback */ }
+    onFallback();
+  });
+}
 
 interface ProjectContextValue {
   storageError: string;
   storageBackend: 'Loading' | 'IndexedDB' | 'Browser storage';
   lastSavedAt: string | null;
   lastBackupAt: string | null;
+  versionHistory: ProjectVersion[];
   project: ProjectData;
   results: AllResults;
   savedProjects: { name: string; data: ProjectData }[];
   setProject: (updater: ProjectData | ((prev: ProjectData) => ProjectData)) => void;
   loadProject: (data: ProjectData) => void;
   saveProject: (name: string) => void;
+  restoreVersion: (id: string) => void;
   deleteProject: (name: string) => void;
   loadSampleProject: () => void;
   resetProject: () => void;
@@ -47,6 +61,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const [storageError, setStorageError] = useState('');
   const [storageBackend, setStorageBackend] = useState<'Loading' | 'IndexedDB' | 'Browser storage'>('Loading');
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [versionHistory, setVersionHistory] = useState<ProjectVersion[]>([]);
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(() => {
     try { return localStorage.getItem('swd-last-json-backup'); } catch { return null; }
   });
@@ -98,38 +113,56 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      try {
-        const storedActive = await readProjectRecord<unknown>(ACTIVE_KEY);
-        const legacyActive = localStorage.getItem(ACTIVE_KEY);
-        const active = storedActive ?? (legacyActive ? JSON.parse(legacyActive) : undefined);
-        if (active) {
+      let indexedDbAvailable = true;
+      let storedActive: unknown;
+      let storedProjects: unknown;
+      let storedHistory: unknown;
+      try { storedActive = await readProjectRecord<unknown>(ACTIVE_KEY); } catch { indexedDbAvailable = false; }
+      let legacyActive: unknown;
+      let legacyProjects: unknown;
+      try { const value = localStorage.getItem(ACTIVE_KEY); legacyActive = value ? JSON.parse(value) : undefined; } catch { /* corrupted browser copy is ignored */ }
+      if (cancelled) return;
+      const active = storedActive ?? legacyActive;
+      if (active) {
+        try {
           const parsed = parseProject(active);
           setProjectState(parsed);
-          if (storedActive === undefined) await writeProjectRecord(ACTIVE_KEY, parsed);
+          if (storedActive === undefined && indexedDbAvailable) {
+            try { await writeProjectRecord(ACTIVE_KEY, parsed); } catch { indexedDbAvailable = false; }
+          }
+        } catch { /* keep the initialized empty project if both stored copies are invalid */ }
+      }
+      try { storedProjects = await readProjectRecord<unknown>(STORAGE_KEY); } catch { indexedDbAvailable = false; }
+      try { const value = localStorage.getItem(STORAGE_KEY); legacyProjects = value ? JSON.parse(value) : []; } catch { legacyProjects = []; }
+      const rawProjects = storedProjects ?? legacyProjects;
+      if (Array.isArray(rawProjects)) {
+        const parsedProjects = rawProjects.flatMap((entry) => {
+          try { return typeof entry.name === 'string' ? [{ name: entry.name, data: parseProject(entry.data) }] : []; }
+          catch { return []; }
+        });
+        setSavedProjects(parsedProjects);
+        if (storedProjects === undefined && indexedDbAvailable) {
+          try { await writeProjectRecord(STORAGE_KEY, parsedProjects); } catch { indexedDbAvailable = false; }
         }
-
-        const storedProjects = await readProjectRecord<unknown>(STORAGE_KEY);
-        const legacyProjects = localStorage.getItem(STORAGE_KEY);
-        const rawProjects = storedProjects ?? (legacyProjects ? JSON.parse(legacyProjects) : []);
-        if (Array.isArray(rawProjects)) {
-          const parsedProjects = rawProjects.flatMap((entry) => {
-            try {
-              return typeof entry.name === 'string' ? [{ name: entry.name, data: parseProject(entry.data) }] : [];
-            } catch {
-              return [];
-            }
-          });
-          setSavedProjects(parsedProjects);
-          if (storedProjects === undefined) await writeProjectRecord(STORAGE_KEY, parsedProjects);
+      }
+      if (indexedDbAvailable) {
+        try { storedHistory = await readProjectRecord<unknown>(HISTORY_KEY); } catch { indexedDbAvailable = false; }
+      }
+      if (storedHistory === undefined) {
+        try { const localHistory = localStorage.getItem(LEGACY_HISTORY_KEY); storedHistory = localHistory ? JSON.parse(localHistory) : undefined; } catch { /* corrupted history copy is ignored */ }
+      }
+      if (Array.isArray(storedHistory)) {
+        const parsedHistory = normalizeProjectHistory(storedHistory, parseProject);
+        setVersionHistory(parsedHistory);
+        if (indexedDbAvailable) {
+          try { await writeProjectRecord(HISTORY_KEY, parsedHistory); }
+          catch { indexedDbAvailable = false; try { localStorage.setItem(LEGACY_HISTORY_KEY, JSON.stringify(parsedHistory.slice(0, 3))); } catch { /* best-effort fallback */ } }
         }
-        if (!cancelled) setStorageBackend('IndexedDB');
-      } catch {
-        if (!cancelled) {
-          setStorageBackend('Browser storage');
-          setStorageError('Using browser storage fallback. Export a JSON backup regularly.');
-        }
-      } finally {
-        if (!cancelled) setStorageReady(true);
+      }
+      if (!cancelled) {
+        setStorageBackend(indexedDbAvailable ? 'IndexedDB' : 'Browser storage');
+        if (!indexedDbAvailable) setStorageError('Using browser storage fallback. Export a JSON backup regularly.');
+        setStorageReady(true);
       }
     };
     void load();
@@ -147,16 +180,29 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     } catch {
       // IndexedDB remains the primary storage if the browser copy is full.
     }
-    void writeProjectRecord(ACTIVE_KEY, project).then(() => {
-      setStorageBackend('IndexedDB');
-      setStorageError('');
-      setLastSavedAt(savedAt);
-    }).catch(() => {
-      setStorageBackend('Browser storage');
-      setStorageError(fallbackSaved ? 'IndexedDB is unavailable; changes are saved in this browser. Export a JSON backup regularly.' : 'Automatic save failed. Export a JSON backup before closing this page.');
-      if (fallbackSaved) setLastSavedAt(savedAt);
-    });
-  }, [project, storageReady]);
+    const timer = window.setTimeout(() => {
+      void writeProjectRecord(ACTIVE_KEY, project).then(async () => {
+        setStorageBackend('IndexedDB');
+        setStorageError('');
+        setLastSavedAt(savedAt);
+        const latest = versionHistory[0];
+        const age = latest ? Date.now() - new Date(latest.savedAt).getTime() : Infinity;
+        if (age >= 15 * 60 * 1000) {
+          const version: ProjectVersion = { id: createVersionId(), savedAt, label: 'Automatic recovery point', data: structuredClone(project) };
+          const updated = [version, ...versionHistory].slice(0, 20);
+          setVersionHistory(updated);
+          await writeProjectRecord(HISTORY_KEY, updated).catch(() => {
+            try { localStorage.setItem(LEGACY_HISTORY_KEY, JSON.stringify(updated.slice(0, 3))); } catch { /* best-effort fallback */ }
+          });
+        }
+      }).catch(() => {
+        setStorageBackend('Browser storage');
+        setStorageError(fallbackSaved ? 'IndexedDB is unavailable; changes are saved in this browser. Export a JSON backup regularly.' : 'Automatic save failed. Export a JSON backup before closing this page.');
+        if (fallbackSaved) setLastSavedAt(savedAt);
+      });
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [project, storageReady, versionHistory]);
 
   useEffect(() => {
     if (!storageReady) return;
@@ -191,25 +237,36 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       ];
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-        setSavedProjects(updated);
         setStorageError('');
       } catch {
-        setStorageError('Project could not be saved. Storage may be full; export a JSON backup.');
-        throw new Error('Project could not be saved.');
+        setStorageError('Browser storage is full; the named save will be stored in IndexedDB.');
       }
+      setSavedProjects(updated);
+      const version: ProjectVersion = { id: createVersionId(), savedAt: new Date().toISOString(), label: `Saved project: ${name}`, data: structuredClone(project) };
+      const updatedHistory = [version, ...versionHistory].slice(0, 20);
+      setVersionHistory(updatedHistory);
+      persistHistory(updatedHistory, () => setStorageError('IndexedDB is unavailable; a smaller recovery history is kept in browser storage.'));
     },
-    [project, savedProjects]
+    [project, savedProjects, versionHistory]
   );
+
+  const restoreVersion = useCallback((id: string) => {
+    const version = versionHistory.find(entry => entry.id === id);
+    if (!version) return;
+    const beforeRestore: ProjectVersion = { id: createVersionId(), savedAt: new Date().toISOString(), label: 'Before version restore', data: structuredClone(project) };
+    const updatedHistory = [beforeRestore, ...versionHistory].slice(0, 20);
+    setVersionHistory(updatedHistory);
+    persistHistory(updatedHistory, () => setStorageError('IndexedDB is unavailable; a smaller recovery history is kept in browser storage.'));
+    setProjectState(parseProject(structuredClone(version.data)));
+  }, [versionHistory, project]);
 
   const deleteProject = useCallback(
     (name: string) => {
       const updated = savedProjects.filter((p) => p.name !== name);
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-        setSavedProjects(updated);
-      } catch {
-        setStorageError('Saved project could not be deleted.');
-      }
+      } catch { setStorageError('Browser storage could not be updated; the project list is saving to IndexedDB.'); }
+      setSavedProjects(updated);
     },
     [savedProjects]
   );
@@ -234,11 +291,9 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         const updated = [...savedProjects, { name: copyName, data }];
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-          setSavedProjects(updated);
-          setProjectState(data);
-        } catch {
-          setStorageError('Project could not be duplicated. Export a JSON backup.');
-        }
+        } catch { setStorageError('Browser storage is full; the duplicate is saving to IndexedDB.'); }
+        setSavedProjects(updated);
+        setProjectState(data);
       }
     },
     [savedProjects]
@@ -381,12 +436,14 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         storageBackend,
         lastSavedAt,
         lastBackupAt,
+        versionHistory,
         project,
         results,
         savedProjects,
         setProject,
         loadProject,
         saveProject,
+        restoreVersion,
         deleteProject,
         loadSampleProject,
         resetProject,

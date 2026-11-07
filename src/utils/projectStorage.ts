@@ -4,6 +4,16 @@ const STORE_NAME = 'project-records';
 
 let databasePromise: Promise<IDBDatabase> | null = null;
 
+export function normalizeProjectHistory<T>(value: unknown, parseData: (data: unknown) => T) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    try {
+      if (!entry || typeof entry.id !== 'string' || typeof entry.savedAt !== 'string' || typeof entry.label !== 'string') return [];
+      return [{ id: entry.id, savedAt: entry.savedAt, label: entry.label, data: parseData(entry.data) }];
+    } catch { return []; }
+  }).slice(0, 20);
+}
+
 function openDatabase(): Promise<IDBDatabase> {
   if (typeof indexedDB === 'undefined') return Promise.reject(new Error('IndexedDB is unavailable.'));
   if (!databasePromise) {
