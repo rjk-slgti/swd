@@ -16,7 +16,6 @@ import {
   Tabs,
   BarChart,
   KPICard,
-  WarningCard,
   EngineeringNoticeBanner,
   PrinciplesBanner,
   StudentCalculationCard,
@@ -33,6 +32,7 @@ import {
 } from 'lucide-react';
 import type { OccupancyGroup, WorkshopProcess, Fixture, TankDimension, WPSFFactor, SubMeterZone } from '@/types';
 import { calculateAll } from '@/calculations/engine';
+import { DesignIssuesPanel } from '@/components/DesignIssuesPanel';
 
 // ============================================================
 // STEP 1 — PROJECT DETAILS
@@ -1959,7 +1959,7 @@ export function StepSustainability() {
 // STEP 14 — DESIGN REVIEW
 // ============================================================
 
-export function StepDesignReview() {
+export function StepDesignReview({ onSelectStep }: { onSelectStep: (stepId: string) => void }) {
   const { results } = useProject();
 
   return (
@@ -1998,7 +1998,7 @@ export function StepDesignReview() {
                 ? 'bg-green-100 text-green-800'
                 : 'bg-amber-100 text-amber-800'
             }`}>
-              {results.systemValidation.overallStatus}
+              {results.systemValidation.overallStatus === 'READY FOR PROFESSIONAL PROTOTYPE USE' ? 'No automated flags' : 'Review required'}
             </span>
             <span className="text-xs text-slate-600 font-medium">
               {results.systemValidation.passCount} PASS / {results.systemValidation.reviewCount} REVIEW
@@ -2038,16 +2038,7 @@ export function StepDesignReview() {
         </div>
       </Card>
 
-      {results.warnings.length > 0 && (
-        <Card>
-          <h3 className="text-sm font-semibold text-slate-700 mb-3">Warnings & Alerts ({results.warnings.length})</h3>
-          <div className="space-y-3">
-            {results.warnings.map((w) => (
-              <WarningCard key={w.id} warning={w} />
-            ))}
-          </div>
-        </Card>
-      )}
+      <DesignIssuesPanel warnings={results.warnings} onSelectStep={onSelectStep} />
 
       {results.recommendations.length > 0 && (
         <Card>
@@ -2231,7 +2222,7 @@ export function StepReport() {
 // DASHBOARD
 // ============================================================
 
-export function Dashboard() {
+export function Dashboard({ onSelectStep }: { onSelectStep: (stepId: string) => void }) {
   const { project, results, setProject } = useProject();
 
   return (
@@ -2398,23 +2389,7 @@ export function Dashboard() {
         </Card>
       )}
 
-      {/* WARNINGS SUMMARY */}
-      {results.warnings.length > 0 && (
-        <Card>
-          <h3 className="text-sm font-semibold text-slate-700 mb-3">Active Warnings ({results.warnings.length})</h3>
-          <div className="space-y-2">
-            {results.warnings.slice(0, 5).map((w) => (
-              <div key={w.id} className={`p-3 rounded-lg border text-sm ${
-                w.level === 'critical' ? 'bg-red-50 border-red-200 text-red-800' :
-                w.level === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
-                'bg-blue-50 border-blue-200 text-blue-800'
-              }`}>
-                <span className="font-semibold">[{w.section}]</span> {w.message}
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
+      <DesignIssuesPanel warnings={results.warnings} onSelectStep={onSelectStep} limit={5} />
 
       {/* DESIGN MODE TOGGLE */}
       <Card>

@@ -8,6 +8,12 @@ try {
   const { createEmptyProject, createSampleProject } = await server.ssrLoadModule('/src/data/defaults.ts');
   const e = await server.ssrLoadModule('/src/calculations/engine.ts');
   const { parseProject } = await server.ssrLoadModule('/src/utils/projectValidation.ts');
+  const { getIssueStepId } = await server.ssrLoadModule('/src/utils/designIssueRouting.ts');
+  test('Review issues route to the related workflow step', () => {
+    assert.equal(getIssueStepId('Water Sources'), 'step5');
+    assert.equal(getIssueStepId('Pipework Design'), 'pipes');
+    assert.equal(getIssueStepId('Fire Water'), 'step12');
+  });
   test('Empty project starts without sample consumption or a startup crash', () => {
     const r = e.calculateAll(createEmptyProject()); close(r.add.finalADD, 0); assert.equal(r.peakFlow, null); assert.notEqual(r.overallStatus, 'PASS');
   });

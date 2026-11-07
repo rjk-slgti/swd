@@ -30,6 +30,7 @@ import { ProgressRing } from '@/components/ui';
 import type { EngineeringWarning, ModuleCompleteness } from '@/types';
 import type { Language } from '@/i18n/I18nContext';
 import { useI18n } from '@/i18n/I18nContext';
+import { getIssueStepId } from '@/utils/designIssueRouting';
 
 type StepStatus = 'Not started' | 'In progress' | 'Needs attention' | 'Complete';
 const phaseTranslationKeys = ['phase_project','phase_people','phase_sources','phase_storage','phase_review'] as const;
@@ -43,22 +44,13 @@ const stepCompletionKey: Record<string, keyof ModuleCompleteness> = {
   step11: 'greywater', step12: 'fireWater', step13: 'sustainability', step15: 'reports',
 };
 
-const stepWarningSections: Record<string, string[]> = {
-  step2: ['occupancy', 'population'], step3: ['demand'], step4: ['demand'],
-  step5: ['water balance', 'water sources'], step6: ['peak fixture demand'],
-  step7: ['storage', 'tank'], step8: ['pump'], pipes: ['pipework', 'pipe'],
-  step9: ['wastewater'], step10: ['rainwater'], step11: ['greywater'],
-  step12: ['fire'], step14: ['review', 'validation'],
-};
-
 function getStepStatus(
   stepId: string,
   activeStepId: string,
   moduleCompleteness: ModuleCompleteness,
   warnings: EngineeringWarning[],
 ): StepStatus {
-  const sections = stepWarningSections[stepId] ?? [];
-  if (warnings.some((warning) => sections.some((section) => warning.section.toLowerCase().includes(section)))) {
+  if (warnings.some((warning) => warning.level !== 'info' && warning.level !== 'advisory' && getIssueStepId(warning.section) === stepId)) {
     return 'Needs attention';
   }
   if (stepId === activeStepId) return 'In progress';

@@ -174,7 +174,7 @@ function AppContent() {
   const renderView = () => {
     switch (activeView) {
       case 'dashboard':
-        return <Dashboard />;
+        return <Dashboard onSelectStep={setActiveView} />;
       case 'standards':
         return <StepStandards />;
       case 'step1':
@@ -210,11 +210,11 @@ function AppContent() {
       case 'step13':
         return <StepSustainability />;
       case 'step14':
-        return <StepDesignReview />;
+        return <StepDesignReview onSelectStep={setActiveView} />;
       case 'step15':
         return <StepReport />;
       default:
-        return <Dashboard />;
+        return <Dashboard onSelectStep={setActiveView} />;
     }
   };
 

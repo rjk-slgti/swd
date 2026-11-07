@@ -7,7 +7,6 @@ import {
   Fuel,
   Warehouse,
   AlertTriangle,
-  CheckCircle2,
   ChevronRight,
   X,
   Download,
@@ -19,36 +18,13 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { ALL_STEPS, getPhaseForStep } from '@/data/workflowPhases';
+import { DesignIssuesPanel } from '@/components/DesignIssuesPanel';
 
 interface LiveTelemetryPaneProps {
   activeStepId: string;
   onSelectStep: (stepId: string) => void;
   onClose?: () => void;
   isMobileDrawer?: boolean;
-}
-
-function mapSectionToStepId(section: string): string {
-  const s = section.toLowerCase();
-  if (s.includes('source') || s.includes('supply')) return 'step5';
-  if (s.includes('occupan')) return 'step2';
-  if (s.includes('special') || s.includes('canteen') || s.includes('irrigation')) return 'step4';
-  if (s.includes('domestic') || s.includes('average daily') || s.includes('maximum daily') || s.includes('demand basis')) return 'step3';
-  if (s.includes('water balance') || s.includes('continuity')) return 'step5';
-  if (s.includes('peak') || s.includes('fixture') || s.includes('loading')) return 'step6';
-  if (s.includes('storage') || s.includes('tank')) return 'step7';
-  if (s.includes('pump')) return 'step8';
-  if (s.includes('pipe') || s.includes('hydraulic') || s.includes('velocity') || s.includes('headloss')) return 'pipes';
-  if (s.includes('hot water') || s.includes('legionella')) return 'hotwater';
-  if (s.includes('waste') || s.includes('sewage') || s.includes('drainage')) return 'step9';
-  if (s.includes('rain')) return 'step10';
-  if (s.includes('grey') || s.includes('gray')) return 'step11';
-  if (s.includes('fire')) return 'step12';
-  if (s.includes('submeter') || s.includes('meter')) return 'submetering';
-  if (s.includes('sustainab') || s.includes('green') || s.includes('efficiency')) return 'step13';
-  if (s.includes('review') || s.includes('checklist') || s.includes('qa')) return 'step14';
-  if (s.includes('report')) return 'step15';
-  if (s.includes('standard') || s.includes('wpsf')) return 'standards';
-  return 'dashboard';
 }
 
 export function LiveTelemetryPane({
@@ -64,8 +40,7 @@ export function LiveTelemetryPane({
   const currentPhase = getPhaseForStep(activeStepId);
 
   // Warnings statistics
-  const criticalWarnings = results.warnings.filter((w) => w.level === 'critical');
-  const advisoryWarnings = results.warnings.filter((w) => w.level !== 'critical');
+  const blockingWarningCount = results.warnings.filter((w) => w.level === 'critical').length;
   const totalWarnings = results.warnings.length;
 
   // Real-time calculation derivations
@@ -156,7 +131,7 @@ export function LiveTelemetryPane({
           {totalWarnings > 0 && (
             <span
               className={`ml-0.5 px-1.5 py-0.2 text-[9px] font-bold rounded-full ${
-                criticalWarnings.length > 0
+                blockingWarningCount > 0
                   ? 'bg-red-500/20 text-red-400 border border-red-500/40'
                   : 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
               }`}
@@ -485,7 +460,7 @@ export function LiveTelemetryPane({
                     <div className="flex justify-between text-slate-300">
                       <span className="text-slate-400">Critical Warnings:</span>
                       <span className="font-bold text-red-400 font-mono">
-                        {criticalWarnings.length} unresolved
+                        {blockingWarningCount} unresolved
                       </span>
                     </div>
                   </div>
@@ -761,96 +736,7 @@ export function LiveTelemetryPane({
         {/* TAB 2: QA WARNINGS AUDIT */}
         {/* ============================================================ */}
         {activeTab === 'warnings' && (
-          <div className="space-y-3">
-            <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center justify-between">
-              <div>
-                <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> Design issues
-                </h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                  Click any issue to jump straight to that calculation step
-                </p>
-              </div>
-              <div className="flex gap-1">
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-950 text-red-300 border border-red-800/60">
-                  {criticalWarnings.length} Critical
-                </span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-800/60">
-                  {advisoryWarnings.length} Advisory
-                </span>
-              </div>
-            </div>
-
-            {results.warnings.length === 0 ? (
-              <div className="p-6 text-center bg-slate-950/40 rounded-xl border border-slate-800">
-                <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-                <h4 className="text-xs font-bold text-white">No open flagged checks</h4>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  This automated review does not certify the design. Independent professional review is still required.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {results.warnings.map((w) => {
-                  const targetStep = mapSectionToStepId(w.section);
-                  const isCritical = w.level === 'critical';
-
-                  return (
-                    <button
-                      key={w.id}
-                      type="button"
-                      onClick={() => onSelectStep(targetStep)}
-                      aria-label={`Open ${w.section} inputs: ${w.recommendedAction || w.message}`}
-                      className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer group ${
-                        isCritical
-                          ? 'bg-red-950/30 border-red-500/40 hover:border-red-400 hover:bg-red-950/50'
-                          : 'bg-amber-950/20 border-amber-500/30 hover:border-amber-400 hover:bg-amber-950/40'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              isCritical ? 'bg-red-500 animate-ping' : 'bg-amber-400'
-                            }`}
-                          />
-                          <span
-                            className={`text-[10px] font-bold uppercase px-1.5 py-0.2 rounded ${
-                              isCritical ? 'bg-red-900/60 text-red-300' : 'bg-amber-900/60 text-amber-300'
-                            }`}
-                          >
-                            {isCritical ? 'Blocking' : w.level === 'warning' ? 'Warning' : 'Info'}
-                          </span>
-                          <span className="text-[10px] text-slate-400">{w.section}</span>
-                        </div>
-                        <span className="text-[10px] text-blue-400 flex items-center gap-0.5 font-medium group-hover:translate-x-0.5 transition-transform">
-                          Fix in {targetStep} <ChevronRight className="w-3 h-3" />
-                        </span>
-                      </div>
-
-                      <h4 className="text-xs font-bold text-white mt-1 group-hover:text-blue-300 transition-colors">
-                        {w.message}
-                      </h4>
-
-                      {w.whyItMatters && (
-                        <p className="text-[10px] text-slate-300 mt-1 leading-relaxed">
-                          {w.whyItMatters}
-                        </p>
-                      )}
-
-                      {w.recommendedAction && (
-                        <div className="mt-2 text-[10px] text-emerald-300/90 bg-emerald-950/40 p-1.5 rounded border border-emerald-800/40 flex items-start gap-1">
-                          <span className="font-semibold text-emerald-400">Action:</span>
-                          <span className="flex-1">{w.recommendedAction}</span>
-                        </div>
-                      )}
-                      {!w.recommendedAction && <p className="mt-2 text-[10px] text-emerald-300/90">Open {w.section} inputs and review the value and its source.</p>}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          <DesignIssuesPanel warnings={results.warnings} onSelectStep={onSelectStep} variant="dark" />
         )}
 
         {/* ============================================================ */}
