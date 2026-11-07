@@ -79,6 +79,11 @@ function AppContent() {
   const [saveName, setSaveName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const trainingPeakExample = project.peakDesign.source.startsWith('TRAINING-EXAMPLE:');
+  const fireCriteriaUnconfirmed = project.fireWater.enabled && (
+    project.fireWater.classification !== 'USER OVERRIDE' ||
+    !project.fireWater.source.trim() ||
+    /required|verify/i.test(project.fireWater.source)
+  );
 
   useEffect(() => {
     if (activeView !== 'intake' && getStepById(activeView)) {
@@ -101,6 +106,10 @@ function AppContent() {
         setFeedback('Final report export is blocked while the training peak-flow example is active. Replace it with a documented project calculation first.');
         return;
       }
+      if (fireCriteriaUnconfirmed) {
+        setFeedback('Final report export is blocked while enabled fire-water criteria remain unconfirmed. Add a project source and confirm the flow and duration first.');
+        return;
+      }
       setFeedback(`Preparing ${format} export…`);
       try {
         const exports = await import('@/exports/exportModules');
@@ -116,6 +125,10 @@ function AppContent() {
     const handlePrint = () => {
       if (trainingPeakExample) {
         setFeedback('Printing a final report is blocked while the training peak-flow example is active. Replace it with a documented project calculation first.');
+        return;
+      }
+      if (fireCriteriaUnconfirmed) {
+        setFeedback('Printing a final report is blocked while enabled fire-water criteria remain unconfirmed. Add a project source and confirm the flow and duration first.');
         return;
       }
       window.print();
@@ -135,7 +148,7 @@ function AppContent() {
       window.removeEventListener('print-report', handlePrint);
       window.removeEventListener('open-autopilot', handleOpenAutoPilot);
     };
-  }, [project, results, trainingPeakExample]);
+  }, [project, results, trainingPeakExample, fireCriteriaUnconfirmed]);
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -288,6 +301,7 @@ function AppContent() {
               </div>
             )}
             {trainingPeakExample && <div role="alert" className="mb-4 border-2 border-dashed border-red-400 bg-red-50 p-3 text-sm font-bold uppercase tracking-wide text-red-800">Training example active — all final report exports and print are blocked until this value is replaced.</div>}
+            {fireCriteriaUnconfirmed && <div role="alert" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">Fire-water criteria need a cited project source and your confirmation. Final report exports and print are blocked until confirmed.</div>}
             {feedback && (
               <div
                 role="status"
