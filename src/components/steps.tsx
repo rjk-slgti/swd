@@ -245,30 +245,30 @@ export function StepOccupancy() {
               {groups.map((g) => {
                 const result = results.occupancy.find((r) => r.group.id === g.id);
                 return (
-                  <div key={g.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end p-3 bg-slate-50 rounded-lg">
-                    <div className="md:col-span-3">
+                  <div key={g.id} className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-8 gap-3 items-end p-3 bg-slate-50 rounded-lg">
+                    <div className="sm:col-span-2 xl:col-span-2">
                       <TextInput label="Group Name" value={g.name} onChange={(v) => updateGroup(g.id, 'name', v)} />
                     </div>
-                    <div className="md:col-span-2">
+                    <div className="xl:col-span-1">
                       <NumberInput label="Count" value={g.count} onChange={(v) => updateGroup(g.id, 'count', v)} unit="persons" />
                     </div>
-                    <div className="md:col-span-2">
+                    <div className="xl:col-span-2">
                       <NumberInput label="Consumption" value={g.consumptionFactor} onChange={(v) => updateGroup(g.id, 'consumptionFactor', v)} unit="L/person/operating day" />
                     </div>
-                    <div className="md:col-span-2">
+                    <div className="xl:col-span-1">
                       <NumberInput label="Days/Week" value={g.daysPerWeek} max={7} onChange={(v) => updateGroup(g.id, 'daysPerWeek', v)} unit="days" />
                     </div>
-                    <div className="md:col-span-2">
+                    <div className="sm:col-span-2 xl:col-span-2">
                       <div className="text-xs text-slate-500">Daily Demand</div>
                       <div className="text-lg font-bold text-blue-700">
                         {result ? (result.dailyDemand / 1000).toFixed(2) : '0.00'} m³
                       </div>
-                      <StatusBadge status={g.classification} />
-                    </div>
-                    <div className="md:col-span-1">
-                      {g.id.startsWith('OCC-') && !g.id.match(/^OCC-0[1-9]$/) && (
-                        <button onClick={() => removeGroup(g.id)} className="text-red-500 text-xs hover:text-red-700">Remove</button>
-                      )}
+                      <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                        <StatusBadge status={g.classification} />
+                        {g.id.startsWith('OCC-') && !g.id.match(/^OCC-0[1-9]$/) && (
+                          <button onClick={() => removeGroup(g.id)} className="text-red-500 text-xs hover:text-red-700">Remove</button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
