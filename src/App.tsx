@@ -221,11 +221,12 @@ function AppContent() {
   const criticalWarnings = results.warnings.filter((w) => w.level === 'critical').length;
 
   if (activeView === 'intake') {
-    return <GuidedIntake onComplete={() => setActiveView('dashboard')} onEngineer={() => setActiveView('dashboard')} onSample={() => { loadSampleProject(); setActiveView('dashboard'); }} />;
+    return <><a className="skip-link" href="#intake-main">Skip to project setup</a><GuidedIntake onComplete={() => setActiveView('dashboard')} onEngineer={() => setActiveView('dashboard')} onSample={() => { loadSampleProject(); setActiveView('dashboard'); }} /></>;
   }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
+      <a className="skip-link" href="#main-content">Skip to main content</a>
       {/* Modern Application Header */}
       <AppHeader
         projectName={project.projectInfo.projectName}
@@ -286,7 +287,7 @@ function AppContent() {
         )}
 
         {/* Main Calculation Canvas */}
-        <main className="flex-1 min-w-0 overflow-y-auto bg-slate-50/70 pb-16 xl:pb-0 print:bg-white">
+        <main id="main-content" tabIndex={-1} className="flex-1 min-w-0 overflow-y-auto bg-slate-50/70 pb-16 xl:pb-0 print:bg-white">
           <div className="max-w-5xl mx-auto p-4 md:p-6 lg:p-8 print:p-0 print:max-w-none">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
               <div className="flex flex-wrap items-center gap-3">
