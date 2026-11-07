@@ -8,9 +8,10 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import {
   Document, Packer, Paragraph, HeadingLevel, Table, TableRow, TableCell,
-  TextRun, AlignmentType, WidthType, BorderStyle, PageBreak, Header, Footer, PageNumber,
+  TextRun, AlignmentType, WidthType, BorderStyle, PageBreak, Header, Footer, PageNumber, Bookmark, InternalHyperlink,
 } from 'docx';
 import saveAs from 'file-saver';
+import { bookmarkFor, makeReportPackage, REPORT_CONTENTS } from './reportTemplate';
 
 // --- Helpers ---
 function reportText(value: string | number): string {
@@ -37,12 +38,15 @@ function getFilenames(project: ProjectData) {
 // ============================================================
 
 export function exportPDF(project: ProjectData, results: AllResults, download = true) {
+  const report = makeReportPackage(project, results);
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const pageWidth = 210;
   const pageHeight = 297;
   const margin = 15;
   const contentWidth = pageWidth - 2 * margin;
   let y = margin;
+  const sectionPages = new Map<string, number>();
+  const tocLinks: { title: string; y: number }[] = [];
 
   const addHeader = () => {
     doc.setFontSize(8);
@@ -77,6 +81,8 @@ export function exportPDF(project: ProjectData, results: AllResults, download = 
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(30, 64, 175);
     doc.text(text, margin, y);
+    const normalized = text.replace(/^\d+(?:\.\d+)*[.)]?\s*/, '');
+    if (!sectionPages.has(normalized)) sectionPages.set(normalized, doc.getNumberOfPages());
     y += size * 0.6 + 3;
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(0);
@@ -135,27 +141,22 @@ export function exportPDF(project: ProjectData, results: AllResults, download = 
   y = margin + 5;
   addHeading('Document Control', 1);
   addTable(
-    ['Rev', 'Date', 'Description', 'Prepared By', 'Checked By'],
-    [[project.projectInfo.revision, project.projectInfo.date, 'Preliminary design', project.projectInfo.preparedBy, project.projectInfo.checkedBy]]
+    ['Project / Report No.', 'Rev', 'Date', 'Status', 'Prepared By', 'Checked By'],
+    [[`${project.projectInfo.projectNumber || project.projectInfo.projectName} / ${project.projectInfo.reportNumber || '—'}`, project.projectInfo.revision, project.projectInfo.date, 'Preliminary design - verification required', project.projectInfo.preparedBy, project.projectInfo.checkedBy]]
   );
 
   // --- TABLE OF CONTENTS ---
   addHeading('Table of Contents', 1);
-  const tocItems = [
-    '1. Executive Summary', '2. Project Description', '3. Scope', '4. Design Basis',
-    '5. Standards and References', '6. Design Assumptions', '7. Occupancy',
-    '8. Water Demand Calculation', '9. Average Daily Demand', '10. Maximum Daily Demand',
-    '11. Peak Fixture Demand', '12. Water Storage', '13. Tank Sizing',
-    '14. Pump Design', '15. Wastewater', '16. Rainwater Harvesting',
-    '17. Greywater Reuse', '18. Fire Water', '19. Sustainability',
-    '20. Recommendations', '21. Conclusion', 'Appendices',
-  ];
-  tocItems.forEach((item) => {
+  const tocPage = doc.getNumberOfPages();
+  REPORT_CONTENTS.forEach(({ title }) => {
     ensureSpace(6);
     doc.setFontSize(10);
-    doc.text(item, margin + 5, y);
+    doc.setTextColor(30, 64, 175);
+    doc.text(title, margin + 5, y);
+    tocLinks.push({ title, y: y - 3.5 });
     y += 5;
   });
+  doc.setTextColor(0);
 
   // --- 1. EXECUTIVE SUMMARY ---
   doc.addPage();
@@ -173,6 +174,34 @@ export function exportPDF(project: ProjectData, results: AllResults, download = 
     if (results.storage) addParagraph(`Required domestic storage is ${results.storage.requiredCapacity} m³, split into ${results.storage.undergroundTank} m³ underground and ${results.storage.roofTank} m³ roof tank.`);
     if (results.pump) addParagraph(`The preliminary pump duty is ${results.pump.designFlowM3h} m³/h at ${results.pump.tdh} m TDH, with an estimated electrical input of ${results.pump.electricalInputPower} kW.`);
   }
+  addTable(report.summary.headers, report.summary.rows);
+  if (report.occupancyChart.length > 0) {
+    addHeading('Demand by Occupancy Group (L/day)', 2);
+    const chartItems = report.occupancyChart.slice(0, 7);
+    const chartHeight = chartItems.length * 7 + 8;
+    ensureSpace(chartHeight);
+    const chartY = y;
+    const chartLabelWidth = 55;
+    const chartValueWidth = 26;
+    const chartWidth = contentWidth - chartLabelWidth - chartValueWidth;
+    const chartMax = Math.max(...chartItems.map((row) => row.dailyDemandL));
+    doc.setFontSize(8);
+    chartItems.forEach((row, index) => {
+      const rowY = chartY + 5 + index * 7;
+      const label = row.name.length > 28 ? `${row.name.slice(0, 25)}...` : row.name;
+      doc.setTextColor(60);
+      doc.text(label, margin, rowY);
+      doc.setFillColor(8, 145, 178);
+      doc.rect(margin + chartLabelWidth, rowY - 3, Math.max(0.8, chartWidth * row.dailyDemandL / chartMax), 4, 'F');
+      doc.setTextColor(30, 41, 59);
+      doc.text(`${row.dailyDemandL.toFixed(1)} L/day`, margin + contentWidth, rowY, { align: 'right' });
+    });
+    doc.setTextColor(100);
+    doc.setFontSize(7);
+    doc.text('Source: application occupancy calculation results. Bars are scaled to the largest displayed group.', margin, chartY + chartItems.length * 7 + 2);
+    doc.setTextColor(0);
+    y = chartY + chartHeight;
+  }
 
   // --- 2. PROJECT DESCRIPTION ---
   addHeading('2. Project Description', 1);
@@ -180,6 +209,7 @@ export function exportPDF(project: ProjectData, results: AllResults, download = 
   addParagraph(`Type: ${project.projectInfo.projectType} — ${project.projectInfo.buildingType}`);
   addParagraph(`Location: ${project.projectInfo.location}, ${project.projectInfo.district}, ${project.projectInfo.province}, ${project.projectInfo.country}`);
   addParagraph(`Design Stage: ${project.projectInfo.designStage}`);
+  addTable(report.context.headers, report.context.rows);
 
   // --- 3. SCOPE ---
   addHeading('3. Scope', 1);
@@ -192,14 +222,12 @@ export function exportPDF(project: ProjectData, results: AllResults, download = 
 
   // --- 5. STANDARDS ---
   addHeading('5. Standards and References', 1);
-  addTable(['ID', 'Standard', 'Application', 'Notes'],
-    project.standards.map(s => [s.id, s.reference, s.application, s.notes]));
+  addTable(report.references.headers, report.references.rows);
 
   // --- 6. ASSUMPTIONS ---
   addHeading('6. Design Assumptions', 1);
   if (results.assumptions.length > 0) {
-    addTable(['No.', 'Parameter', 'Value', 'Unit', 'Basis', 'Verification'],
-      results.assumptions.map(a => [a.no, a.parameter, a.adoptedValue, a.unit, a.basis, a.verificationRequired ? 'Required' : 'No']));
+    addTable(report.assumptions.headers, report.assumptions.rows);
   }
 
   // --- 7. OCCUPANCY ---
@@ -359,18 +387,16 @@ export function exportPDF(project: ProjectData, results: AllResults, download = 
 
   // --- 21. CONCLUSION ---
   addHeading('Design Risks and Missing Information', 1);
+  addTable(report.actions.headers, report.actions.rows);
   results.warnings.forEach(w => addParagraph(`[${w.level}] ${w.section}: ${w.message}`));
   addHeading('21. Conclusion', 1);
-  addParagraph(
-    'This preliminary water services design provides a basis for detailed design development. ' +
-    'All assumptions must be verified, and the final design must be checked by a suitably qualified professional ' +
-    'against the latest applicable regulations, authority requirements, site conditions, and manufacturer data.'
-  );
+  addParagraph(report.disclaimer);
 
   // --- APPENDICES ---
   doc.addPage();
   addHeader();
   y = margin + 5;
+  addHeading('Appendices', 1);
   addHeading('Appendix A — Calculation Register', 1);
   addTable(['ID', 'Section', 'Input', 'Result', 'Source'],
     results.calcRegister.map(c => [c.id, c.section, c.input, c.result, c.source]));
@@ -381,6 +407,17 @@ export function exportPDF(project: ProjectData, results: AllResults, download = 
 
   // --- FOOTER on all pages ---
   const totalPages = doc.getNumberOfPages();
+  REPORT_CONTENTS.forEach(({ title }) => {
+    const targetPage = sectionPages.get(title);
+    if (targetPage) doc.outline.add(null, title, { pageNumber: targetPage });
+  });
+  tocLinks.forEach(({ title, y: linkY }) => {
+    const targetPage = sectionPages.get(title);
+    if (targetPage) {
+      doc.setPage(tocPage);
+      doc.link(margin + 4, linkY, contentWidth - 8, 5, { pageNumber: targetPage, top: 15 });
+    }
+  });
   for (let i = 2; i <= totalPages; i++) {
     doc.setPage(i);
     addFooter(i);
@@ -395,30 +432,49 @@ export function exportPDF(project: ProjectData, results: AllResults, download = 
 // ============================================================
 
 export function exportExcel(project: ProjectData, results: AllResults, download = true) {
+  const report = makeReportPackage(project, results);
   const wb = XLSX.utils.book_new();
+  const reportIndexRows: (string | number)[][] = [
+    ['WATER SERVICES DESIGN REPORT'],
+    ['Preliminary design - verification required'],
+    ['Project', project.projectInfo.projectName],
+    ['Location', [project.projectInfo.location, project.projectInfo.district, project.projectInfo.province, project.projectInfo.country].filter(Boolean).join(', ')],
+    ['Report number', project.projectInfo.reportNumber || '—'],
+    ['Revision', project.projectInfo.revision || 'P01'],
+    ['Date', project.projectInfo.date || '—'],
+    ['Prepared by', project.projectInfo.preparedBy || '—'],
+    ['Checked by', project.projectInfo.checkedBy || '—'],
+    [''],
+    ['Report section', 'Workbook sheet', 'Navigate'],
+    ...REPORT_CONTENTS.map(({ title, sheet }) => [title, sheet, 'Open']),
+    ['Statistical and visual summary', 'Visual Summary', 'Open'],
+  ];
 
   const makeSheet = (name: string, data: (string|number)[][]) => {
     const ws = XLSX.utils.aoa_to_sheet(data);
     const columnCount = Math.max(...data.map(row => row.length));
     ws['!cols'] = Array.from({ length: columnCount }, (_, index) => ({ wch: Math.min(55, Math.max(15, ...data.map(row => String(row[index] ?? '').length + 2))) }));
     if (ws['!ref']) ws['!autofilter'] = { ref: ws['!ref'] };
+    ws['!margins'] = { left: 0.25, right: 0.25, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 };
     for (const key of Object.keys(ws)) if (!key.startsWith('!') && ws[key].t === 'n') ws[key].z = '#,##0.00';
     XLSX.utils.book_append_sheet(wb, ws, name.substring(0, 31));
   };
 
+  // The index is first so exported workbooks open at a navigable report front page.
+  makeSheet('Report Index', reportIndexRows);
+  makeSheet('Executive Summary', [
+    ...report.documentControl.rows.flatMap((row, i) => i === 0 ? [[...report.documentControl.headers], row, ['']] : [row]),
+    report.summary.headers,
+    ...report.summary.rows,
+    [''],
+    ['Preliminary design notice'],
+    [report.disclaimer],
+  ]);
+
   // 1. Project Information
   makeSheet('Project Information', [
-    ['Field', 'Value'],
-    ['Project Name', project.projectInfo.projectName],
-    ['Client', project.projectInfo.client],
-    ['Consultant', project.projectInfo.consultant],
-    ['Designer', project.projectInfo.designer],
-    ['Location', project.projectInfo.location],
-    ['Country', project.projectInfo.country],
-    ['Project Type', project.projectInfo.projectType],
-    ['Design Stage', project.projectInfo.designStage],
-    ['Revision', project.projectInfo.revision],
-    ['Date', project.projectInfo.date],
+    report.context.headers,
+    ...report.context.rows,
   ]);
 
   // 2. Design Basis
@@ -631,10 +687,20 @@ export function exportExcel(project: ProjectData, results: AllResults, download 
   ]);
 
   // 20. Standards Register
-  makeSheet('Standards', [
-    ['ID', 'Standard', 'Title', 'Application', 'Section Used', 'Notes'],
-    ...project.standards.map(s => [s.id, s.reference, s.title, s.application, s.sectionUsed, s.notes]),
-  ]);
+  makeSheet('Standards Register', [report.references.headers, ...report.references.rows]);
+  makeSheet('Issues and Actions', [report.actions.headers, ...report.actions.rows]);
+  const occupancyMax = Math.max(1, ...report.occupancyChart.map((item) => item.dailyDemandL));
+  const visualRows: (string | number)[][] = [
+    ['Project data visual summary', 'Values are application results; bars are scaled within each chart only.'],
+    ['Series', 'Group / period', 'Value', 'Unit', 'Relative visual'],
+    ...report.occupancyChart.map((item) => ['Occupancy demand', item.name, item.dailyDemandL, 'L/day', '█'.repeat(Math.max(1, Math.round(item.dailyDemandL / occupancyMax * 24)))]),
+  ];
+  if (results.rainwater) {
+    const monthlyMax = Math.max(1, ...results.rainwater.monthlyHarvested);
+    visualRows.push([''], ['Monthly rainwater harvest', 'Month', 'Harvested', 'm³/month', 'Relative visual']);
+    results.rainwater.monthlyHarvested.forEach((value, index) => visualRows.push(['Rainwater', ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][index], value, 'm³/month', value > 0 ? '█'.repeat(Math.max(1, Math.round(value / monthlyMax * 24))) : '']));
+  }
+  makeSheet('Visual Summary', visualRows);
 
   // 21. Design Checklist
   makeSheet('Checklist', [
@@ -693,6 +759,15 @@ export function exportExcel(project: ProjectData, results: AllResults, download 
   const occupancyTotalRow = results.occupancy.length + 2;
   occupancySheet[`F${occupancyTotalRow}`] = { t: 'n', f: `SUM(F2:F${occupancyTotalRow - 1})`, v: results.occupancy.reduce((sum, row) => sum + row.dailyDemand, 0), z: '#,##0.00' };
   occupancySheet[`G${occupancyTotalRow}`] = { t: 'n', f: `F${occupancyTotalRow}/1000`, v: results.occupancy.reduce((sum, row) => sum + row.dailyDemand, 0) / 1000, z: '#,##0.00' };
+  const reportIndex = wb.Sheets['Report Index'];
+  REPORT_CONTENTS.forEach(({ sheet }, index) => {
+    if (wb.Sheets[sheet]) {
+      const row = index + 12;
+      reportIndex[`C${row}`] = { t: 's', f: `HYPERLINK("#'${sheet}'!A1","Open")`, v: 'Open' };
+    }
+  });
+  if (wb.Sheets['Visual Summary']) reportIndex[`C${12 + REPORT_CONTENTS.length}`] = { t: 's', f: 'HYPERLINK("#\'Visual Summary\'!A1","Open")', v: 'Open' };
+  reportIndex['!autofilter'] = { ref: `A11:C${12 + REPORT_CONTENTS.length}` };
   if (download) XLSX.writeFile(wb, getFilenames(project).xlsx);
   return wb;
 }
@@ -702,6 +777,7 @@ export function exportExcel(project: ProjectData, results: AllResults, download 
 // ============================================================
 
 export async function exportWord(project: ProjectData, results: AllResults, download = true) {
+  const report = makeReportPackage(project, results);
   const border = { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' };
   const cellBorders = { top: border, bottom: border, left: border, right: border };
 
@@ -726,7 +802,7 @@ export async function exportWord(project: ProjectData, results: AllResults, down
   };
 
   const heading = (text: string, level: (typeof HeadingLevel)[keyof typeof HeadingLevel]) =>
-    new Paragraph({ text, heading: level });
+    new Paragraph({ children: [new Bookmark({ id: bookmarkFor(text.replace(/^\d+(?:\.\d+)*[.)]?\s*/, '')), children: [new TextRun(text)] })], heading: level });
 
   const para = (text: string) => new Paragraph({ children: [new TextRun({ text: reportText(text), size: 20 })] });
 
@@ -752,12 +828,17 @@ export async function exportWord(project: ProjectData, results: AllResults, down
     alignment: AlignmentType.CENTER,
     children: [new TextRun({ text: `Revision ${project.projectInfo.revision} — ${project.projectInfo.date}`, size: 20 })],
   }));
+  sections.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `Report ${project.projectInfo.reportNumber || '—'} | Project ${project.projectInfo.projectNumber || '—'}`, size: 18, color: '475569' })] }));
+  sections.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'PRELIMINARY DESIGN - VERIFICATION REQUIRED', bold: true, size: 18, color: 'B45309' })] }));
   sections.push(new Paragraph({ children: [new PageBreak()] }));
 
   // Document Control
   sections.push(heading('Document Control', HeadingLevel.HEADING_1));
-  sections.push(makeTable(['Rev', 'Date', 'Description', 'Prepared By', 'Checked By'],
-    [[project.projectInfo.revision, project.projectInfo.date, 'Preliminary design', project.projectInfo.preparedBy, project.projectInfo.checkedBy]]));
+  sections.push(makeTable(report.documentControl.headers, report.documentControl.rows));
+
+  // Contents links point to bookmarks on the matching report headings.
+  sections.push(heading('Contents', HeadingLevel.HEADING_1));
+  REPORT_CONTENTS.forEach(({ title }) => sections.push(new Paragraph({ children: [new InternalHyperlink({ anchor: bookmarkFor(title), children: [new TextRun({ text: title, color: '1E40AF', underline: {} })] })] })));
 
   // Executive Summary
   sections.push(heading('1. Executive Summary', HeadingLevel.HEADING_1));
@@ -770,12 +851,19 @@ export async function exportWord(project: ProjectData, results: AllResults, down
     if (results.storage) sections.push(para(`Required Storage: ${results.storage.requiredCapacity} m³.`));
     if (results.pump) sections.push(para(`Pump Duty: ${results.pump.designFlowM3h} m³/h @ ${results.pump.tdh} m TDH.`));
   }
+  sections.push(makeTable(report.summary.headers, report.summary.rows));
+  if (report.occupancyChart.length > 0) {
+    const maxDemand = Math.max(...report.occupancyChart.map((row) => row.dailyDemandL));
+    sections.push(heading('Demand by Occupancy Group (L/day)', HeadingLevel.HEADING_2));
+    sections.push(makeTable(['Group', 'Daily demand (L/day)', 'Relative bar', 'Data source'], report.occupancyChart.slice(0, 8).map((row) => [row.name, row.dailyDemandL, '█'.repeat(Math.max(1, Math.round(row.dailyDemandL / maxDemand * 20))), 'Application occupancy result'])));
+  }
 
   // Project Description
   sections.push(heading('2. Project Description', HeadingLevel.HEADING_1));
   sections.push(para(`Project: ${project.projectInfo.projectName}`));
   sections.push(para(`Type: ${project.projectInfo.projectType} — ${project.projectInfo.buildingType}`));
   sections.push(para(`Location: ${project.projectInfo.location}, ${project.projectInfo.country}`));
+  sections.push(makeTable(report.context.headers, report.context.rows));
 
   // Scope
   sections.push(heading('3. Scope', HeadingLevel.HEADING_1));
@@ -783,14 +871,12 @@ export async function exportWord(project: ProjectData, results: AllResults, down
 
   // Standards
   sections.push(heading('4. Standards and References', HeadingLevel.HEADING_1));
-  sections.push(makeTable(['ID', 'Standard', 'Application', 'Notes'],
-    project.standards.map(s => [s.id, s.reference, s.application, s.notes])));
+  sections.push(makeTable(report.references.headers, report.references.rows));
 
   // Assumptions
   sections.push(heading('5. Design Assumptions', HeadingLevel.HEADING_1));
   if (results.assumptions.length > 0) {
-    sections.push(makeTable(['No.', 'Parameter', 'Value', 'Unit', 'Basis', 'Verification'],
-      results.assumptions.map(a => [a.no, a.parameter, a.adoptedValue, a.unit, a.basis, a.verificationRequired ? 'Required' : 'No'])));
+    sections.push(makeTable(report.assumptions.headers, report.assumptions.rows));
   }
 
   // Occupancy
@@ -912,6 +998,7 @@ export async function exportWord(project: ProjectData, results: AllResults, down
   sections.push(heading('Pipework Design', HeadingLevel.HEADING_1));
   sections.push(makeTable(['Reach', 'Diameter mm', 'Flow L/s', 'Velocity m/s', 'Residual m'], results.pipes.map(p => [p.pipe.label, p.pipe.internalDiameter, p.pipe.flow, p.velocity, p.residualPressure])));
   sections.push(heading('Design Risks and Missing Information', HeadingLevel.HEADING_1));
+  sections.push(makeTable(report.actions.headers, report.actions.rows));
   results.warnings.forEach(w => sections.push(para(`[${w.level}] ${w.section}: ${w.message}`)));
   if (!results.peakFlow) sections.push(para('Additional design information required: documented external simultaneous peak flow.'));
   // Recommendations
@@ -920,10 +1007,11 @@ export async function exportWord(project: ProjectData, results: AllResults, down
 
   // Conclusion
   sections.push(heading('20. Conclusion', HeadingLevel.HEADING_1));
-  sections.push(para('This preliminary design provides a basis for detailed design. All assumptions must be verified, and the final design must be checked by a suitably qualified professional against the latest applicable regulations and manufacturer data.'));
+  sections.push(para(report.disclaimer));
 
   // Appendices
   sections.push(new Paragraph({ children: [new PageBreak()] }));
+  sections.push(heading('Appendices', HeadingLevel.HEADING_1));
   sections.push(heading('Appendix A — Calculation Register', HeadingLevel.HEADING_1));
   sections.push(makeTable(['ID', 'Section', 'Input', 'Result', 'Source'],
     results.calcRegister.map(c => [c.id, c.section, c.input, c.result, c.source])));
